@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sherlock Monitor</title>
+<style>
+/* ======================================================================
+   Sherlock Telemetry Dashboard — Dark Theme
+   ====================================================================== */
+:root {
+  --bg:       #0f1117;
+  --surface:  #1a1d27;
+  --surface2: #232735;
+  --gold:     #c9a84c;
+  --gold-dim: #8a7433;
+  --text:     #e8eaf0;
+  --text-dim: #8b8fa3;
+  --green:    #34d399;
+  --yellow:   #facc15;
+  --red:      #f87171;
+  --blue:     #60a5fa;
+  --radius:   8px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+button { cursor: pointer; font-family: inherit; }
+input, textarea, select { font-family: inherit; }
+
+/* ---- Layout ---- */
+.app {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  grid-template-rows: 56px 1fr;
+  height: 100vh;
+}
+.topbar {
+  grid-column: 1 / -1;
+  background: var(--surface);
+  border-bottom: 1px solid var(--surface2);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+}
+.topbar h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--gold);
+  letter-spacing: 0.5px;
+}
+.topbar .badge {
+  background: var(--red);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 22px;
+  text-align: center;
+}
+.topbar .badge.zero { background: var(--surface2); color: var(--text-dim); }
+.topbar .spacer { flex: 1; }
+.topbar button {
+  background: var(--surface2);
+  border: 1px solid var(--gold-dim);
+  color: var(--gold);
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.topbar button:hover { background: var(--gold-dim); color: #fff; }
+
+.main {
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* ---- Node Cards Grid ---- */
+.node-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+}
+.node-card {
+  background: var(--surface);
+  border: 1px solid var(--surface2);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.status-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.online  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.status-dot.warning { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+.status-dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
+.node-name {
+  font-weight: 600;
+  font-size: 15px;
+  flex: 1;
+}
+.node-version {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.last-seen {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+/* ---- Gauges ---- */
+.gauges {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.gauge {
+  flex: 1;
+  text-align: center;
+}
+.gauge-bar-bg {
+  height: 8px;
+  background: var(--surface2);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.gauge-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+.gauge-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.gauge-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ---- Service Pills ---- */
+.services {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.svc-pill {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.svc-pill.up      { background: #163a2a; color: var(--green); }
+.svc-pill.down    { background: #3a1616; color: var(--red); }
+.svc-pill.unknown { background: var(--surface2); color: var(--text-dim); }
+
+/* ---- Action Buttons ---- */
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.actions button {
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--surface2);
+  background: var(--bg);
+  color: var(--text-dim);
+}
+.actions button:hover { border-color: var(--gold-dim); color: var(--gold); }
+
+/* ---- Alert Sidebar ---- */
+.sidebar {
+  background: var(--surface);
+  border-left: 1px solid var(--surface2);
+  overflow-y: auto;
+  padding: 16px;
+}
+.sidebar h2 {
+  font-size: 14px;
+  color: var(--gold);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.alert-entry {
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.5;
+  border-left: 3px solid;
+}
+.alert-entry.critical { background: #2a1515; border-color: var(--red); }
+.alert-entry.warning  { background: #2a2515; border-color: var(--yellow); }
+.alert-entry.info     { background: #152030; border-color: var(--blue); }
+.alert-ts {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+.alert-node {
+  color: var(--gold);
+  font-weight: 600;
+}
+.alert-msg { color: var(--text); }
+
+.empty-state {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 40px 16px;
+  font-size: 14px;
+}
+
+/* ---- Modals ---- */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--surface2);
+  border-radius: var(--radius);
+  width: 90%;
+  max-width: 720px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--surface2);
+}
+.modal-header h3 { flex: 1; font-size: 15px; color: var(--gold); }
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  line-height: 1;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+/* Log viewer */
+.log-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.log-controls select, .log-controls input {
+  background: var(--bg);
+  border: 1px solid var(--surface2);
+  color: var(--text);
+  padding: 5px 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+.log-output {
+  background: var(--bg);
+  border: 1px solid var(--surface2);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 50vh;
+  overflow-y: auto;
+  color: var(--text-dim);
+}
+
+/* Command console */
+.cmd-form label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+.cmd-form select, .cmd-form input, .cmd-form textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--surface2);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.cmd-form textarea { min-height: 60px; resize: vertical; }
+.cmd-submit {
+  margin-top: 16px;
+  background: var(--gold);
+  color: var(--bg);
+  border: none;
+  padding: 8px 20px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 13px;
+}
+.cmd-submit:hover { opacity: 0.9; }
+.cmd-result {
+  margin-top: 12px;
+  background: var(--bg);
+  border: 1px solid var(--surface2);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-family: monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+  display: none;
+}
+
+/* File transfer */
+.file-section { margin-bottom: 20px; }
+.file-section h4 {
+  font-size: 13px;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.drop-zone {
+  border: 2px dashed var(--surface2);
+  border-radius: var(--radius);
+  padding: 30px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+.drop-zone.dragover { border-color: var(--gold); color: var(--gold); }
+.drop-zone input[type="file"] { display: none; }
+.pull-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.pull-row input { flex: 1; }
+.pull-btn {
+  background: var(--gold);
+  color: var(--bg);
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Webhook config */
+.webhook-form {
+  display: flex;
+  gap: 8px;
+}
+.webhook-form input { flex: 1; }
+.webhook-form button {
+  background: var(--gold);
+  color: var(--bg);
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 56px 1fr auto;
+  }
+  .sidebar { border-left: none; border-top: 1px solid var(--surface2); max-height: 300px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Top Bar -->
+  <div class="topbar">
+    <h1>Sherlock Monitor</h1>
+    <span class="badge zero" id="alertBadge">0</span>
+    <span class="spacer"></span>
+    <button onclick="openModal('webhookModal')">Webhook</button>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main">
+    <div class="node-grid" id="nodeGrid">
+      <div class="empty-state" id="emptyState">Waiting for agent heartbeats...</div>
+    </div>
+  </div>
+
+  <!-- Alert Sidebar -->
+  <div class="sidebar">
+    <h2>Alerts</h2>
+    <div id="alertFeed">
+      <div class="empty-state">No alerts yet</div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Modals ====== -->
+
+<!-- Log Viewer -->
+<div class="modal-overlay" id="logModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="logModalTitle">Logs</h3>
+      <button class="modal-close" onclick="closeModal('logModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="log-controls">
+        <select id="logStream">
+          <option value="all">All Streams</option>
+          <option value="web">Web</option>
+          <option value="ollama">Ollama</option>
+          <option value="chroma">Chroma</option>
+          <option value="searx">SearX</option>
+          <option value="nginx">Nginx</option>
+        </select>
+        <select id="logLevel">
+          <option value="all">All Levels</option>
+          <option value="error">Error</option>
+          <option value="warning">Warning</option>
+          <option value="info">Info</option>
+        </select>
+        <input type="number" id="logLines" value="200" min="10" max="5000" style="width:80px" title="Lines">
+        <button onclick="fetchLogs()" style="background:var(--gold);color:var(--bg);border:none;padding:5px 12px;border-radius:var(--radius);font-weight:600;">Refresh</button>
+      </div>
+      <div class="log-output" id="logOutput">Select a node and click Refresh to load logs.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Command Console -->
+<div class="modal-overlay" id="cmdModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="cmdModalTitle">Command Console</h3>
+      <button class="modal-close" onclick="closeModal('cmdModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="cmd-form">
+        <label>Command</label>
+        <select id="cmdCommand">
+          <option value="service">Service (start/stop/restart)</option>
+          <option value="reindex">Reindex</option>
+          <option value="reboot">Reboot</option>
+        </select>
+        <label>Arguments (JSON)</label>
+        <textarea id="cmdArgs">{"action": "restart", "service": "web"}</textarea>
+        <button class="cmd-submit" onclick="sendCommand()">Execute</button>
+      </div>
+      <div class="cmd-result" id="cmdResult"></div>
+    </div>
+  </div>
+</div>
+
+<!-- File Transfer -->
+<div class="modal-overlay" id="fileModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="fileModalTitle">File Transfer</h3>
+      <button class="modal-close" onclick="closeModal('fileModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="file-section">
+        <h4>Push File to Node</h4>
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+          Drop a file here or click to select
+          <input type="file" id="fileInput" onchange="handleFilePick(event)">
+        </div>
+        <div style="margin-top:8px;">
+          <label style="font-size:12px;color:var(--text-dim);">Destination path on node:</label>
+          <input id="pushDest" style="width:100%;background:var(--bg);border:1px solid var(--surface2);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-size:13px;margin-top:4px;" placeholder="/path/on/agent">
+        </div>
+        <div id="pushStatus" style="margin-top:8px;font-size:12px;color:var(--text-dim);"></div>
+      </div>
+      <div class="file-section">
+        <h4>Pull File from Node</h4>
+        <div class="pull-row">
+          <input id="pullPath" placeholder="/path/on/agent" style="background:var(--bg);border:1px solid var(--surface2);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-size:13px;">
+          <button class="pull-btn" onclick="pullFile()">Pull</button>
+        </div>
+        <div id="pullStatus" style="margin-top:8px;font-size:12px;color:var(--text-dim);"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Webhook Config -->
+<div class="modal-overlay" id="webhookModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>Webhook Configuration</h3>
+      <button class="modal-close" onclick="closeModal('webhookModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">Set a webhook URL (Slack, email relay, etc.) to receive alert notifications.</p>
+      <div class="webhook-form">
+        <input id="webhookUrl" placeholder="https://hooks.slack.com/services/..." style="background:var(--bg);border:1px solid var(--surface2);color:var(--text);padding:8px 10px;border-radius:var(--radius);font-size:13px;">
+        <button onclick="saveWebhook()">Save</button>
+      </div>
+      <div id="webhookStatus" style="margin-top:8px;font-size:12px;color:var(--text-dim);"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ======================================================================
+   Sherlock Telemetry Dashboard — Client JS
+   ====================================================================== */
+
+let currentNodeId = null;    // Active node for modal context
+let nodesData = {};          // Latest snapshot from /api/nodes
+let alertsData = [];         // Latest alerts
+
+// ---- Helpers ----
+
+function timeAgo(epoch) {
+  if (!epoch) return 'never';
+  const s = Math.floor(Date.now() / 1000 - epoch);
+  if (s < 5) return 'just now';
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+
+function gaugeColor(pct) {
+  if (pct > 90) return 'var(--red)';
+  if (pct > 70) return 'var(--yellow)';
+  return 'var(--green)';
+}
+
+function svcClass(status) {
+  if (status === true || status === 'up' || status === 'running') return 'up';
+  if (status === false || status === 'down' || status === 'stopped') return 'down';
+  if (typeof status === 'object' && status !== null) {
+    const s = status.status || '';
+    if (['up','running'].includes(s)) return 'up';
+    if (['down','stopped'].includes(s)) return 'down';
+  }
+  return 'unknown';
+}
+
+function svcStatus(info) {
+  if (typeof info === 'object' && info !== null) return info.status || 'unknown';
+  return String(info);
+}
+
+// ---- Rendering ----
+
+function renderNodes() {
+  const grid = document.getElementById('nodeGrid');
+  const empty = document.getElementById('emptyState');
+  const ids = Object.keys(nodesData);
+
+  if (ids.length === 0) {
+    grid.innerHTML = '';
+    grid.appendChild(empty);
+    empty.style.display = '';
+    return;
+  }
+
+  let html = '';
+  for (const nid of ids) {
+    const n = nodesData[nid];
+    const m = n.metrics || {};
+    const cpu = m.cpu_percent != null ? Number(m.cpu_percent) : null;
+    const ram = m.ram_percent != null ? Number(m.ram_percent) : null;
+
+    // Find first disk or total
+    let diskPct = null;
+    let diskLabel = 'Disk';
+    const disks = m.disks || {};
+    if (typeof disks === 'object') {
+      const keys = Object.keys(disks);
+      if (keys.length) {
+        const first = keys[0];
+        const val = disks[first];
+        diskPct = typeof val === 'number' ? val : (val && val.percent != null ? Number(val.percent) : null);
+        diskLabel = 'Disk ' + first;
+      }
+    }
+    if (diskPct === null && m.disk_percent != null) diskPct = Number(m.disk_percent);
+
+    const services = n.services || {};
+    const svcNames = Object.keys(services);
+
+    html += `
+    <div class="node-card" data-node="${nid}">
+      <div class="node-header">
+        <span class="status-dot ${n.status}"></span>
+        <span class="node-name">${esc(n.name || nid)}</span>
+        <span class="node-version">${esc(n.version || '')}</span>
+      </div>
+      <div class="last-seen">Last seen: ${timeAgo(n.last_seen_epoch)} &middot; ${esc(n.host || '')}</div>
+      <div class="gauges">
+        ${gaugeHtml('CPU', cpu)}
+        ${gaugeHtml('RAM', ram)}
+        ${gaugeHtml(diskLabel, diskPct)}
+      </div>
+      <div class="services">
+        ${svcNames.map(s => `<span class="svc-pill ${svcClass(services[s])}">${esc(s)}</span>`).join('')}
+      </div>
+      <div class="actions">
+        <button onclick="openLogs('${nid}')">Logs</button>
+        <button onclick="quickCmd('${nid}','reindex',{})">Reindex</button>
+        <button onclick="quickCmd('${nid}','service',{action:'restart',service:'all'})">Restart Services</button>
+        <button onclick="if(confirm('Reboot ${esc(n.name||nid)}?')) quickCmd('${nid}','reboot',{})">Reboot</button>
+        <button onclick="openFiles('${nid}')">Files</button>
+        <button onclick="openCmd('${nid}')">Console</button>
+      </div>
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function gaugeHtml(label, pct) {
+  if (pct === null || pct === undefined) {
+    return `<div class="gauge">
+      <div class="gauge-bar-bg"><div class="gauge-bar-fill" style="width:0%;background:var(--surface2);"></div></div>
+      <div class="gauge-value" style="color:var(--text-dim);">--</div>
+      <div class="gauge-label">${label}</div>
+    </div>`;
+  }
+  pct = Math.min(100, Math.max(0, pct));
+  return `<div class="gauge">
+    <div class="gauge-bar-bg"><div class="gauge-bar-fill" style="width:${pct}%;background:${gaugeColor(pct)};"></div></div>
+    <div class="gauge-value" style="color:${gaugeColor(pct)};">${pct.toFixed(1)}%</div>
+    <div class="gauge-label">${label}</div>
+  </div>`;
+}
+
+function renderAlerts() {
+  const feed = document.getElementById('alertFeed');
+  const badge = document.getElementById('alertBadge');
+
+  if (alertsData.length === 0) {
+    feed.innerHTML = '<div class="empty-state">No alerts yet</div>';
+    badge.textContent = '0';
+    badge.className = 'badge zero';
+    return;
+  }
+
+  const recent = alertsData.filter(a => (Date.now()/1000 - a.epoch) < 3600).length;
+  badge.textContent = String(recent);
+  badge.className = recent > 0 ? 'badge' : 'badge zero';
+
+  let html = '';
+  for (const a of alertsData.slice(0, 200)) {
+    const sev = a.severity || 'info';
+    html += `
+    <div class="alert-entry ${sev}">
+      <div class="alert-ts">${a.ts ? new Date(a.ts).toLocaleString() : ''}</div>
+      <span class="alert-node">${esc(a.node_id || 'system')}</span>
+      <span class="alert-msg"> ${esc(a.message)}</span>
+    </div>`;
+  }
+  feed.innerHTML = html;
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ---- Data Fetching ----
+
+async function fetchNodes() {
+  try {
+    const r = await fetch('/api/nodes');
+    if (r.ok) {
+      nodesData = await r.json();
+      renderNodes();
+    }
+  } catch (e) { /* silent */ }
+}
+
+async function fetchAlerts() {
+  try {
+    const r = await fetch('/api/alerts?limit=200');
+    if (r.ok) {
+      alertsData = await r.json();
+      renderAlerts();
+    }
+  } catch (e) { /* silent */ }
+}
+
+async function refresh() {
+  await Promise.all([fetchNodes(), fetchAlerts()]);
+}
+
+// ---- Modal Management ----
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+// ---- Logs ----
+
+function openLogs(nodeId) {
+  currentNodeId = nodeId;
+  const name = nodesData[nodeId]?.name || nodeId;
+  document.getElementById('logModalTitle').textContent = 'Logs — ' + name;
+  document.getElementById('logOutput').textContent = 'Loading...';
+  openModal('logModal');
+  fetchLogs();
+}
+
+async function fetchLogs() {
+  if (!currentNodeId) return;
+  const stream = document.getElementById('logStream').value;
+  const level = document.getElementById('logLevel').value;
+  const lines = document.getElementById('logLines').value;
+  const out = document.getElementById('logOutput');
+
+  try {
+    const url = `/api/nodes/${currentNodeId}/logs?stream=${stream}&level=${level}&lines=${lines}`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      out.textContent = `Error ${r.status}: ${err.detail || r.statusText}`;
+      return;
+    }
+    const data = await r.json();
+    out.textContent = typeof data === 'string' ? data :
+                      data.logs ? data.logs :
+                      JSON.stringify(data, null, 2);
+    out.scrollTop = out.scrollHeight;
+  } catch (e) {
+    out.textContent = 'Failed to fetch logs: ' + e.message;
+  }
+}
+
+// ---- Commands ----
+
+function openCmd(nodeId) {
+  currentNodeId = nodeId;
+  const name = nodesData[nodeId]?.name || nodeId;
+  document.getElementById('cmdModalTitle').textContent = 'Console — ' + name;
+  document.getElementById('cmdResult').style.display = 'none';
+  openModal('cmdModal');
+}
+
+async function sendCommand() {
+  if (!currentNodeId) return;
+  const cmd = document.getElementById('cmdCommand').value;
+  let args = {};
+  try { args = JSON.parse(document.getElementById('cmdArgs').value || '{}'); } catch (e) {
+    alert('Invalid JSON in arguments field');
+    return;
+  }
+  const result = document.getElementById('cmdResult');
+  result.style.display = 'block';
+  result.textContent = 'Sending...';
+
+  try {
+    const r = await fetch(`/api/nodes/${currentNodeId}/command`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({command: cmd, args: args}),
+    });
+    const data = await r.json();
+    result.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    result.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function quickCmd(nodeId, command, args) {
+  try {
+    const r = await fetch(`/api/nodes/${nodeId}/command`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({command, args}),
+    });
+    const data = await r.json();
+    if (!r.ok) alert(`Command failed: ${data.detail || JSON.stringify(data)}`);
+  } catch (e) {
+    alert('Command error: ' + e.message);
+  }
+  setTimeout(refresh, 1000);
+}
+
+// ---- File Transfer ----
+
+function openFiles(nodeId) {
+  currentNodeId = nodeId;
+  const name = nodesData[nodeId]?.name || nodeId;
+  document.getElementById('fileModalTitle').textContent = 'Files — ' + name;
+  document.getElementById('pushStatus').textContent = '';
+  document.getElementById('pullStatus').textContent = '';
+  openModal('fileModal');
+}
+
+// Drag and drop
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) pushFile(e.dataTransfer.files[0]);
+});
+
+function handleFilePick(e) {
+  if (e.target.files.length) pushFile(e.target.files[0]);
+}
+
+async function pushFile(file) {
+  if (!currentNodeId) return;
+  const dest = document.getElementById('pushDest').value.trim();
+  if (!dest) { alert('Enter a destination path on the node'); return; }
+  const status = document.getElementById('pushStatus');
+  status.textContent = `Uploading ${file.name}...`;
+
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch(`/api/nodes/${currentNodeId}/file/push?dest=${encodeURIComponent(dest)}`, {
+      method: 'POST',
+      body: fd,
+    });
+    const data = await r.json();
+    status.textContent = r.ok ? `Pushed ${file.name} successfully.` : `Error: ${data.detail || JSON.stringify(data)}`;
+  } catch (e) {
+    status.textContent = 'Upload failed: ' + e.message;
+  }
+}
+
+async function pullFile() {
+  if (!currentNodeId) return;
+  const path = document.getElementById('pullPath').value.trim();
+  if (!path) { alert('Enter a file path to pull from the node'); return; }
+  const status = document.getElementById('pullStatus');
+  status.textContent = 'Downloading...';
+
+  try {
+    const r = await fetch(`/api/nodes/${currentNodeId}/file/pull?path=${encodeURIComponent(path)}`);
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      status.textContent = `Error: ${data.detail || data.error || r.statusText}`;
+      return;
+    }
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = path.split('/').pop() || 'file';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    status.textContent = 'Download started.';
+  } catch (e) {
+    status.textContent = 'Pull failed: ' + e.message;
+  }
+}
+
+// ---- Webhook Config ----
+
+async function saveWebhook() {
+  const url = document.getElementById('webhookUrl').value.trim();
+  const status = document.getElementById('webhookStatus');
+  try {
+    const r = await fetch('/api/alerts/webhook', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url}),
+    });
+    const data = await r.json();
+    status.textContent = data.ok ? 'Webhook saved.' : 'Error saving webhook.';
+    status.style.color = data.ok ? 'var(--green)' : 'var(--red)';
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.style.color = 'var(--red)';
+  }
+}
+
+// ---- Init ----
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

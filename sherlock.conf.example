@@ -1,0 +1,6 @@
+NAS_PATHS=/path/to/nas/folder1,/path/to/nas/folder2
+OLLAMA_URL=http://localhost:11434
+EMBED_MODEL=nomic-embed-text
+LLM_MODEL=sherlock-rag
+OUTPUT_MIRROR_PATHS=
+JWT_SECRET=change-me-to-a-random-string

@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sherlock</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- Auth guard — redirects to /login if no token -->
+<script>
+  if (!localStorage.getItem('sherlock_token')) {
+    window.location.href = '/login';
+  }
+</script>
+
+<div class="app-layout">
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="logo">SHERLOCK</div>
+    <nav class="header-nav">
+      <button class="active" onclick="showView('chat')" id="nav-chat">Chat</button>
+      <button onclick="showView('cases')" id="nav-cases">Cases</button>
+      <button onclick="showView('upload')" id="nav-upload">Upload</button>
+      <button onclick="showView('outputs')" id="nav-outputs">Outputs</button>
+      <button onclick="showView('admin')" id="nav-admin" class="hidden">Admin</button>
+      <button onclick="showView('config')" id="nav-config" class="hidden">Config</button>
+    </nav>
+    <div class="header-right">
+      <span class="user-pill" id="userPill"></span>
+      <button class="btn-icon" title="Sign out" onclick="logout()">&#x2715;</button>
+    </div>
+  </header>
+
+  <!-- NAS warning banner (hidden unless a path is down) -->
+  <div class="nas-banner hidden" id="nasBanner">
+    <span id="nasBannerText">⚠ One or more NAS paths are not accessible.</span>
+    <button class="nas-banner-dismiss" onclick="dismissNasBanner()">&#x2715;</button>
+  </div>
+
+  <!-- Body -->
+  <div class="app-body">
+
+    <!-- Sidebar: Tasks list + Recent queries -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <span>Tasks</span>
+        <button class="btn-icon" title="Export tasks CSV" onclick="exportTasksCsv()" style="font-size:12px;">&#128202;</button>
+        <button class="btn-icon" title="New task" onclick="openNewMatterModal()">&#65291;</button>
+      </div>
+      <div class="sidebar-list" id="matterList"></div>
+
+      <div class="sidebar-section" id="historySection">
+
+        <div class="sidebar-section-header">
+          <span>Recent Queries</span>
+          <button class="sidebar-section-toggle" onclick="toggleHistorySection()" id="historyToggle">&#9650;</button>
+        </div>
+        <div class="sidebar-history" id="historyList"></div>
+      </div>
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-brand">Sherlock Legal Intelligence&trade;</div>
+        <div class="sidebar-footer-copy">&copy; 2026 &nbsp;&middot;&nbsp; Proprietary &amp; Confidential</div>
+        <div class="sidebar-footer-copy">Unauthorized use prohibited.</div>
+      </div>
+    </aside>
+
+    <!-- Main content area (views) -->
+    <main class="main-content">
+
+      <!-- Chat View -->
+      <div id="view-chat" class="chat-view"
+           ondragenter="chatDragEnter(event)"
+           ondragover="chatDragOver(event)"
+           ondragleave="chatDragLeave(event)"
+           ondrop="chatDrop(event)">
+        <div class="chat-drop-overlay hidden" id="chatDropOverlay">
+          <div class="chat-drop-content">
+            <div style="font-size:48px;">&#128206;</div>
+            <div>Drop files here to upload and analyze</div>
+          </div>
+        </div>
+        <div class="chat-header">
+          <span class="matter-title" id="chatMatterTitle" onclick="openEditTask()" style="cursor:pointer;" title="Click to edit task">All Indexed Files</span>
+          <button class="btn-icon hidden" id="editTaskBtn" onclick="openEditTask()" title="Edit task" style="font-size:13px;margin-left:4px;">&#9998;</button>
+          <div class="chat-header-actions">
+            <button class="btn-export hidden" id="exportBtn" title="Export conversation as PDF" onclick="exportMatter()">&#8681; Export</button>
+            <button class="btn btn-sm" onclick="openBrief()" title="Generate task brief" style="font-size:11px;padding:3px 10px">&#128203; Brief</button>
+            <button class="btn btn-sm" onclick="openDeadlines()" title="Extract deadlines" style="font-size:11px;padding:3px 10px">&#9201; Deadlines</button>
+            <div class="scope-toggle">
+              <button class="scope-btn active" data-scope="all" onclick="setScope('all')">All Files</button>
+              <button class="scope-btn hidden" data-scope="case" id="scopeCaseBtn" onclick="setScope('case')">This Case</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Query mode toolbar -->
+        <div class="query-toolbar">
+          <div class="query-type-pills">
+            <button class="qtype-pill active" data-type="auto" onclick="setQueryType('auto')" title="Sherlock decides the best format">Auto</button>
+            <button class="qtype-pill" data-type="summary" onclick="setQueryType('summary')" title="Document review and summary">Summary</button>
+            <button class="qtype-pill" data-type="timeline" onclick="setQueryType('timeline')" title="Chronological event timeline">Timeline</button>
+            <button class="qtype-pill" data-type="risk" onclick="setQueryType('risk')" title="Risks, deadlines, red flags">Risk</button>
+            <button class="qtype-pill" data-type="drafting" onclick="setQueryType('drafting')" title="Drafting support and precedent language">Drafting</button>
+          </div>
+          <div class="query-toolbar-right">
+            <select class="verbosity-select" id="verbositySelect" onchange="setVerbosityRole(this.value)" title="Adjust response depth and tone">
+              <option value="attorney">Attorney</option>
+              <option value="associate">Associate</option>
+              <option value="paralegal">Paralegal</option>
+              <option value="client">Client</option>
+            </select>
+            <button class="research-btn" id="researchBtn" onclick="toggleResearch()" title="Toggle internet research mode (requires SearXNG)">
+              &#127760; Research
+            </button>
+            <button class="clear-chat-btn" onclick="clearChatScreen()" title="Clear the screen (history is preserved)">
+              &#128465; Clear
+            </button>
+          </div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+          <div class="empty-state">
+            <div class="empty-icon">&#128269;</div>
+            <p>Ask anything about your indexed case files.<br><span style="font-size:12px;color:var(--text-muted);">Use the sidebar to organize into Tasks, or just start typing.</span></p>
+          </div>
+        </div>
+
+        <div class="chat-input-area">
+          <div class="chat-input-wrap">
+            <button class="attach-btn" title="Attach file to this task" onclick="triggerFileAttach()">&#128206;</button>
+            <button class="audio-btn" title="Upload audio file for transcription (Whisper)" onclick="triggerAudioUpload()">&#127908;</button>
+            <textarea
+              id="chatInput"
+              placeholder="Ask Sherlock anything about your case files…"
+              rows="1"
+              onkeydown="handleChatKey(event)"
+              oninput="autoResize(this)"
+            ></textarea>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Send (Enter)">&#9658;</button>
+            <button class="stop-btn hidden" id="stopBtn" onclick="stopChat()" title="Stop generating">&#9632;</button>
+          </div>
+          <input type="file" id="audioInput" accept=".mp3,.wav,.m4a,.ogg,.flac,.aac" class="hidden" onchange="uploadAudio(this)">
+          <input type="file" id="fileAttachInput" multiple class="hidden" onchange="attachFiles(this)">
+        </div>
+      </div>
+
+      <!-- Upload View -->
+      <div id="view-upload" class="upload-view hidden">
+        <div class="view-title">Upload Files</div>
+        <div
+          class="drop-zone"
+          id="dropZone"
+          onclick="document.getElementById('fileInput').click()"
+          ondragover="onDragOver(event)"
+          ondragleave="onDragLeave(event)"
+          ondrop="onDrop(event)"
+        >
+          <div class="drop-icon">&#128196;</div>
+          <p><strong>Click to browse</strong> or drag files here</p>
+          <p>PDF, Word, Excel, PowerPoint, TXT, images, audio — up to 500 MB each</p>
+        </div>
+        <input type="file" id="fileInput" multiple class="hidden" onchange="uploadFiles(this.files)">
+        <div class="file-list" id="fileList"></div>
+      </div>
+
+      <!-- Outputs View -->
+      <div id="view-outputs" class="outputs-view hidden">
+        <div class="view-title">Saved Outputs</div>
+        <div id="outputsList"></div>
+      </div>
+
+      <!-- Cases View -->
+      <div id="view-cases" class="cases-view hidden">
+        <div class="view-header">
+          <div class="view-title">Cases</div>
+          <button class="btn-primary" style="width:auto;padding:8px 20px;" onclick="openNewCaseModal()">+ New Case</button>
+        </div>
+
+        <div class="case-filters">
+          <button class="case-filter-btn active" data-status="active" onclick="filterCases('active')">Active</button>
+          <button class="case-filter-btn" data-status="closed" onclick="filterCases('closed')">Closed</button>
+          <button class="case-filter-btn" data-status="all" onclick="filterCases('all')">All</button>
+        </div>
+
+        <div class="case-list" id="caseList">
+          <div class="empty-state"><div class="empty-icon">&#128214;</div><p>No cases yet. Create one to begin.</p></div>
+        </div>
+      </div>
+
+      <!-- Admin View -->
+      <div id="view-admin" class="admin-view hidden">
+
+        <!-- Top sections: scrollable, compact -->
+        <div class="admin-top">
+          <div class="view-title" style="padding:0;margin-bottom:20px;">Admin</div>
+
+          <div class="admin-section">
+            <h3>System Status</h3>
+            <div class="stat-grid" id="statGrid"></div>
+            <button class="btn" onclick="triggerReindex()" id="reindexBtn">&#8635; Re-index NAS</button>
+          </div>
+
+          <div class="admin-section">
+            <h3>Users <button class="btn" style="font-size:11px;padding:4px 10px;" onclick="openNewUserModal()">+ New User</button></h3>
+            <table class="user-table" id="userTable">
+              <thead>
+                <tr><th>Username</th><th>Display Name</th><th>Role</th><th>Active</th><th>Last Login</th><th></th></tr>
+              </thead>
+              <tbody id="userTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="admin-section" style="margin-bottom:0">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <h3 style="margin:0">Usage Dashboard</h3>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm" onclick="loadUsage(1)" style="font-size:11px;padding:2px 8px">24h</button>
+                <button class="btn btn-sm" onclick="loadUsage(7)" style="font-size:11px;padding:2px 8px">7d</button>
+                <button class="btn btn-sm" onclick="loadUsage(30)" style="font-size:11px;padding:2px 8px">30d</button>
+              </div>
+            </div>
+            <div id="usageDashboard"><div class="usage-loading">Click a time range to load.</div></div>
+          </div>
+        </div>
+
+        <!-- Log viewer: fills all remaining vertical space, never scrolls away -->
+        <div class="log-viewer-section">
+          <div class="log-toolbar">
+            <span class="log-toolbar-label">LOGS</span>
+            <select id="logStream" onchange="loadLogs()">
+              <option value="app">App</option>
+              <option value="audit">Audit</option>
+              <option value="rag">RAG</option>
+              <option value="indexer">Indexer</option>
+            </select>
+            <select id="logLevel" onchange="loadLogs()">
+              <option value="">All levels</option>
+              <option value="INFO">INFO</option>
+              <option value="WARNING">WARNING</option>
+              <option value="ERROR">ERROR</option>
+            </select>
+            <input class="log-search" type="text" id="logSearch" placeholder="Search…" oninput="debounceLoadLogs()">
+            <label class="log-live-label" id="logLiveLabel">
+              <input type="checkbox" id="logLive" onchange="toggleLogRefresh()">
+              <span class="log-live-dot" style="display:none" id="logLiveDot"></span>
+              Live
+            </label>
+            <button class="btn log-btn" onclick="downloadLog()">&#8681;</button>
+            <button class="btn log-btn" onclick="loadLogs()">&#8635;</button>
+          </div>
+          <div class="log-viewer" id="logViewer">
+            <div class="log-empty">Select a stream and click ↻ Refresh to load.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Config View (admin only) -->
+      <div id="view-config" class="config-view hidden">
+        <div class="view-title">Configuration</div>
+        <div id="configContent">
+          <div class="empty-state"><div class="empty-icon">&#9881;</div><p>Loading configuration…</p></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- New Task Modal -->
+<div class="modal-overlay hidden" id="newMatterModal">
+  <div class="modal">
+    <h2>New Task</h2>
+    <div class="field">
+      <label>Task Name</label>
+      <input type="text" id="newMatterName" placeholder="e.g. Discovery review, Settlement analysis">
+    </div>
+    <div class="field">
+      <label>Link to Case <span style="color:var(--text-muted);font-weight:normal;">(optional)</span></label>
+      <select id="newMatterCaseId">
+        <option value="">— No case —</option>
+      </select>
+    </div>
+    <div id="newMatterError" class="error-msg hidden"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newMatterModal')">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:8px 24px;" onclick="createMatter()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Task Modal -->
+<div class="modal-overlay hidden" id="editTaskModal">
+  <div class="modal" style="max-width:440px;">
+    <h2>&#9998; Edit Task</h2>
+    <div class="field">
+      <label>Task Name</label>
+      <input type="text" id="editTaskName">
+    </div>
+    <div class="field">
+      <label>Linked Case <span style="color:var(--text-muted);font-weight:normal;">(optional)</span></label>
+      <select id="editTaskCaseId">
+        <option value="">— No case —</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Billable Time <span style="color:var(--text-muted);font-weight:normal;">(hours)</span></label>
+      <input type="number" id="editTaskBillable" step="0.25" min="0" placeholder="0.00">
+    </div>
+    <div id="editTaskError" class="error-msg hidden"></div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="btn" style="color:#e05c5c;border-color:#e05c5c;" onclick="archiveTask()" title="Archive this task">&#128465; Archive</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="closeModal('editTaskModal')">Cancel</button>
+        <button class="btn-primary" style="width:auto;padding:8px 24px;" onclick="saveTaskEdits()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Case Modal -->
+<div class="modal-overlay hidden" id="newCaseModal">
+  <div class="modal" style="max-width:560px;">
+    <h2>New Case</h2>
+    <div class="field-row">
+      <div class="field">
+        <label>Case Name <span class="req">*</span></label>
+        <input type="text" id="nc_case_name" placeholder="e.g. Smith v. Jones">
+      </div>
+      <div class="field">
+        <label>Case Number</label>
+        <input type="text" id="nc_case_number" placeholder="e.g. 2024-CV-031">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Case Type</label>
+        <select id="nc_case_type">
+          <option value="">— Select —</option>
+          <option>Criminal</option><option>Civil</option><option>Family</option>
+          <option>Corporate</option><option>Personal Injury</option>
+          <option>Real Estate</option><option>Immigration</option>
+          <option>Bankruptcy</option><option>Employment</option><option>Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Date Opened</label>
+        <input type="text" id="nc_date_opened" placeholder="YYYY-MM-DD">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Client Name</label>
+        <input type="text" id="nc_client_name">
+      </div>
+      <div class="field">
+        <label>Opposing Party</label>
+        <input type="text" id="nc_opposing_party">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Jurisdiction</label>
+        <input type="text" id="nc_jurisdiction" placeholder="e.g. Northern District of California">
+      </div>
+      <div class="field">
+        <label>Assigned Attorney</label>
+        <input type="text" id="nc_assigned_to">
+      </div>
+    </div>
+    <div class="field">
+      <label>NAS Path <span style="color:var(--text-muted);font-weight:normal;">(optional — folder on shared drive)</span></label>
+      <input type="text" id="nc_nas_path" placeholder="/Volumes/NAS/Cases/Smith_v_Jones">
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="nc_description" rows="2" placeholder="Free-form notes about this case…"></textarea>
+    </div>
+    <div id="newCaseError" class="error-msg hidden"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newCaseModal')">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:8px 24px;" onclick="createCase()">Create Case</button>
+    </div>
+  </div>
+</div>
+
+<!-- New User Modal (admin) -->
+<div class="modal-overlay hidden" id="newUserModal">
+  <div class="modal">
+    <h2>Create User</h2>
+    <div class="field"><label>Username</label><input type="text" id="newUsername"></div>
+    <div class="field"><label>Display Name</label><input type="text" id="newDisplayName"></div>
+    <div class="field"><label>Password</label><input type="password" id="newUserPass"></div>
+    <div class="field">
+      <label>Role</label>
+      <select id="newUserRole"><option value="user">User</option><option value="admin">Admin</option></select>
+    </div>
+    <div id="newUserError" class="error-msg hidden"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newUserModal')">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:8px 24px;" onclick="createUser()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Audio transcript confirm modal -->
+<div class="modal-overlay hidden" id="audioModal">
+  <div class="modal" style="max-width:560px;">
+    <h2>Audio Transcript</h2>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Review and edit before submitting as a query.</p>
+    <div class="field">
+      <textarea id="audioTranscript" rows="5" style="font-family:var(--font);"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('audioModal')">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:8px 24px;" onclick="submitAudioQuery()">Submit Query</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Document Preview Panel (slides in from right) -->
+<div class="preview-panel hidden" id="previewPanel">
+  <div class="preview-panel-header">
+    <div class="preview-panel-title" id="previewTitle">Document</div>
+    <div class="preview-panel-actions">
+      <a class="btn" style="font-size:11px;padding:3px 10px;" id="previewDownloadLink" href="#" target="_blank">&#8681; Download</a>
+      <button class="btn-icon" onclick="closePreview()" title="Close">&#x2715;</button>
+    </div>
+  </div>
+  <div class="preview-panel-body" id="previewBody">
+    <div class="empty-state"><div class="empty-icon">&#128196;</div><p>Loading…</p></div>
+  </div>
+</div>
+<div class="preview-backdrop hidden" id="previewBackdrop" onclick="closePreview()"></div>
+
+<!-- Deadline Extractor Modal -->
+<div class="modal-overlay hidden" id="deadlineModal">
+  <div class="modal" style="max-width:780px;width:95%">
+    <div class="modal-header">
+      <h2>&#9201; Deadline Extractor</h2>
+      <button class="modal-close" onclick="document.getElementById('deadlineModal').classList.add('hidden')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+        <button class="btn btn-primary" id="dlExtractBtn" onclick="extractDeadlines()">&#9889; Extract</button>
+        <button class="btn" onclick="exportDeadlinesCSV()">&#8595; CSV</button>
+        <span style="color:var(--text-muted);font-size:12px;margin-left:auto">Runs AI analysis over all indexed documents in this task</span>
+      </div>
+      <div id="deadlineList" class="deadline-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Task Brief Modal -->
+<div class="modal-overlay hidden" id="briefModal">
+  <div class="modal" style="max-width:760px;width:95%">
+    <div class="modal-header">
+      <h2>&#128203; Task Brief</h2>
+      <button class="modal-close" onclick="document.getElementById('briefModal').classList.add('hidden')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+        <button class="btn btn-primary" id="briefGenBtn" onclick="generateBrief()">&#9889; Generate</button>
+        <span class="brief-meta" id="briefMeta"></span>
+      </div>
+      <div class="brief-content" id="briefContent"></div>
+      <div class="brief-risks" id="briefRisks"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

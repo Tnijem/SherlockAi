@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sherlock — Sign In</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <div class="login-confidential">CONFIDENTIAL &mdash; AUTHORIZED USERS ONLY</div>
+    <div class="login-logo">
+      <img src="/static/assets/logo.svg" alt="Sherlock" onerror="this.style.display='none'">
+      <h1>Sherlock</h1>
+      <p class="login-tagline">Legal Intelligence. Offline.</p>
+    </div>
+    <form id="loginForm" class="login-form">
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      </div>
+      <div id="loginError" class="error-msg hidden"></div>
+      <button type="submit" class="btn-primary" id="loginBtn">Sign In</button>
+    </form>
+  </div>
+
+  <div class="login-footer">
+    &copy; 2026 Sherlock Legal Intelligence&trade; &nbsp;&middot;&nbsp; All Rights Reserved<br>
+    <span>Proprietary &amp; Confidential &mdash; Unauthorized access is prohibited and may be subject to civil and criminal penalties.</span>
+  </div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const err = document.getElementById('loginError');
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+      err.classList.add('hidden');
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const resp = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({username, password}),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          err.textContent = data.detail || 'Login failed.';
+          err.classList.remove('hidden');
+          return;
+        }
+        localStorage.setItem('sherlock_token', data.access_token);
+        localStorage.setItem('sherlock_user', JSON.stringify(data.user));
+        if (data.csrf_token) {
+          localStorage.setItem('sherlock_csrf_token', data.csrf_token);
+        }
+        window.location.href = '/';
+      } catch (ex) {
+        err.textContent = 'Could not connect to server.';
+        err.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    });
+  </script>
+</body>
+</html>

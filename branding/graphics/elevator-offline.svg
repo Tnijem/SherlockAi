@@ -1,0 +1,16 @@
+&lt;svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg"&gt;
+  &lt;defs&gt;
+    &lt;linearGradient id="shieldBg" x1="50%" y1="0%" x2="50%" y2="100%"&gt;
+      &lt;stop offset="0%" stop-color="#10B981"/&gt;
+      &lt;stop offset="100%" stop-color="#059669"/&gt;
+    &lt;/linearGradient&gt;
+  &lt;/defs&gt;
+  &lt;rect width="1080" height="1080" fill="#F8FAFC"/&gt;
+  &lt;circle cx="540" cy="200" r="180" fill="none" stroke="url(#shieldBg)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/&gt;
+  &lt;path d="M400 380 Q540 250 680 380" fill="none" stroke="url(#shieldBg)" stroke-width="20"/&gt;
+  &lt;rect x="480" y="380" width="120" height="200" rx="60" fill="#10B981" opacity="0.8"/&gt;
+  &lt;circle cx="540" cy="450" r="40" fill="#FCD34D"/&gt;
+  &lt;text x="540" y="650" font-family="system-ui" font-size="48" font-weight="700" text-anchor="middle" fill="#1E40AF"&gt;100% Offline&lt;/text&gt;
+  &lt;text x="540" y="720" font-family="system-ui" font-size="28" text-anchor="middle" fill="#64748B"&gt;Air-Gapped Security&lt;/text&gt;
+  &lt;text x="540" y="780" font-family="system-ui" font-size="24" text-anchor="middle" fill="#475569" font-style="italic"&gt;No internet. No leaks.&lt;/text&gt;
+&lt;/svg&gt;

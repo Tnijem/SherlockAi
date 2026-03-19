@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Environment & secrets
+sherlock.conf
+telemetry/agent.conf
+telemetry/server/server.conf
+.env
+*.pem
+*.key
+*.crt
+
+# TLS certificates
+nginx/certs/
+
+# Data (runtime, not source)
+data/
+logs/
+uploads/
+outputs/
+chroma/
+chromadb/
+index_cache/
+ollama/
+
+# Sample data (too large for git)
+SampleData/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Runtime
+nohup.out
+server.log
+setup-*.log
+*.log
+
+# Models (large binaries)
+models/

@@ -1,0 +1,14 @@
+&lt;svg width="400" height="200" viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg"&gt;
+  &lt;rect width="400" height="200" rx="20" fill="none" stroke="#1E40AF" stroke-width="4"/&gt;
+  &lt;!-- Simplified scales icon in mono blue --&gt;
+  &lt;g transform="translate(80, 40) scale(0.8)" fill="none" stroke="#1E40AF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"&gt;
+    &lt;rect x="0" y="0" width="120" height="8" rx="4"/&gt;
+    &lt;circle cx="60" cy="16" r="10"/&gt;
+    &lt;path d="M35 16 Q28 35 35 50" /&gt;
+    &lt;circle cx="35" cy="65" r="22"/&gt;
+    &lt;path d="M85 16 Q92 35 85 50" /&gt;
+    &lt;circle cx="85" cy="65" r="22"/&gt;
+  &lt;/g&gt;
+  &lt;text x="200" y="110" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="700" text-anchor="middle" fill="#1E40AF"&gt;Sherlock&lt;/text&gt;
+  &lt;text x="200" y="155" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="700" text-anchor="middle" fill="#1E40AF"&gt;Law AI&lt;/text&gt;
+&lt;/svg&gt;

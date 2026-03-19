@@ -1,0 +1,7 @@
+scenario,doc_size_gb,monthly_delta_gb,monthly_files,concurrent_users,chroma_mem_gb,index_hrs_full,query_sec_avg,recommended_cpu,ram_gb,ssd_tb,notes
+"Tiny Startup",1,0.1,10,1,1,0.5,0.3,"M2",16,0.5,"Overkill for POC; weekly index"
+"Small Firm",10,1,200,2,9,5,0.4,"M2",16,1,"Monthly index; 512GB ok"
+"Medium Firm",50,3,500,5,42,25,0.6,"M2 Pro",32,1,"Full index weekend; growth buffer"
+"Example: Given",100,5,1000,5,83,50,0.7,"M2 Pro",32,2,"As specified; 2yr growth"
+"Large Firm",200,10,2000,10,163,100,1.0,"M2 Pro",64,4,"Full index 4 days; consider Max"
+"Enterprise",500,20,5000,20,403,250,1.5,"M2 Max",128,8,"Pro + nightly deltas; scale out?"

@@ -1,0 +1,6 @@
+[agent]
+TELEMETRY_SERVER_URL = http://localhost:9200
+AGENT_TOKEN = change-me-to-a-shared-secret
+NODE_NAME = sherlock-local
+HEARTBEAT_INTERVAL = 30
+AGENT_PORT = 9100

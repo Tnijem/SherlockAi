@@ -1,0 +1,17 @@
+&lt;svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg"&gt;
+  &lt;rect width="1080" height="1080" fill="#F8FAFC"/&gt;
+  &lt;!-- Magnifying glass over documents --&gt;
+  &lt;g transform="translate(200, 150)"&gt;
+    &lt;circle cx="300" cy="300" r="200" fill="none" stroke="#3B82F6" stroke-width="25" stroke-linecap="round"/&gt;
+    &lt;path d="M450 450 L600 600" stroke="#3B82F6" stroke-width="25" stroke-linecap="round"/&gt;
+  &lt;/g&gt;
+  &lt;!-- Stacked documents --&gt;
+  &lt;g transform="translate(300, 500) scale(1.2)"&gt;
+    &lt;rect x="0" y="0" width="300" height="180" rx="15" fill="#FFFFFF" stroke="#1E40AF" stroke-width="8"/&gt;
+    &lt;rect x="20" y="20" width="260" height="140" rx="10" fill="#FCD34D" opacity="0.3"/&gt;
+    &lt;rect x="-20" y="-20" width="340" height="220" rx="20" fill="none" stroke="#3B82F6" stroke-width="6" stroke-dasharray="10,10"/&gt;
+    &lt;text x="150" y="110" font-family="system-ui" font-size="24" font-weight="600" text-anchor="middle" fill="#1E40AF"&gt;Case Files&lt;/text&gt;
+  &lt;/g&gt;
+  &lt;text x="540" y="850" font-family="system-ui" font-size="52" font-weight="700" text-anchor="middle" fill="#1E40AF"&gt;Instant RAG Search&lt;/text&gt;
+  &lt;text x="540" y="920" font-family="system-ui" font-size="32" text-anchor="middle" fill="#64748B"&gt;100s GB Local Data&lt;/text&gt;
+&lt;/svg&gt;

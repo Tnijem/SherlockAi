@@ -1,0 +1,5 @@
+# Sample NAS mount paths for law firm cases
+/mnt/nas1/cases
+/mnt/nas2/archives
+/mnt/local/incoming
+/mnt/nas3/images
