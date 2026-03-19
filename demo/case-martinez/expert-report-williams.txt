@@ -1,0 +1,108 @@
+EXPERT REPORT
+
+Case: Martinez v. Coastal Healthcare Systems, Inc. et al.
+Case No. 26-CV-01847-RLR
+
+Prepared by: Dr. David R. Williams, M.D., FACS
+Board Certified General Surgeon
+Professor of Surgery, University of Pennsylvania
+Date: March 1, 2026
+
+═══════════════════════════════════════════════════════════════
+
+I. QUALIFICATIONS
+
+I am a board-certified general surgeon with 28 years of clinical experience. I hold an active faculty appointment as Professor of Surgery at the Perelman School of Medicine, University of Pennsylvania. I have performed over 3,000 laparoscopic cholecystectomies during my career. I have published 47 peer-reviewed articles on biliary surgery, including 12 specifically addressing bile duct injury prevention. I serve on the Society of American Gastrointestinal and Endoscopic Surgeons (SAGES) Safe Cholecystectomy Task Force.
+
+My curriculum vitae is attached as Exhibit A. My fee for review and testimony is $750/hour.
+
+II. MATERIALS REVIEWED
+
+1. Complaint filed February 10, 2026
+2. Complete medical records of Maria Elena Martinez from Coastal Regional Medical Center (January-February 2026)
+3. Pre-operative imaging studies (ultrasound 12/28/2025, CT, MRCP)
+4. Operative reports (Dr. Thornton 01/15/2026; Dr. Alvarez 01/20/2026)
+5. Pathology report (gallbladder specimen)
+6. Dr. Thornton's curriculum vitae and credentialing file
+7. Coastal Regional Medical Center surgical quality assurance policies
+8. Peer review records for Dr. Thornton (2023-2026)
+9. Deposition transcript of Dr. James Thornton (not yet taken as of this report)
+
+III. STANDARD OF CARE
+
+The standard of care for laparoscopic cholecystectomy is well-established and has been codified in the SAGES Safe Cholecystectomy Program, which I helped develop. The critical elements include:
+
+A. CRITICAL VIEW OF SAFETY (CVS)
+
+The critical view of safety, first described by Strasberg in 1995, is the single most important step in preventing bile duct injury during laparoscopic cholecystectomy. The CVS requires that the surgeon achieve three criteria before clipping or cutting any structures:
+
+   1. The hepatocystic triangle must be cleared of fat and fibrous tissue
+   2. The lower one-third of the gallbladder must be separated from the liver bed
+   3. Only two structures (cystic duct and cystic artery) should be seen entering the gallbladder
+
+Achievement of CVS should be documented in the operative report, ideally with an intraoperative photograph. This has been the standard of care in the United States since at least 2010 and is endorsed by every major surgical society.
+
+B. INTRAOPERATIVE CHOLANGIOGRAM (IOC)
+
+While routine IOC is debated, there is strong consensus that IOC should be performed when:
+   - The anatomy cannot be clearly delineated
+   - There is any uncertainty about ductal identification
+   - The surgeon encounters unusual anatomy or inflammation
+
+C. BAIL-OUT PROCEDURES
+
+When safe dissection cannot be achieved laparoscopically, the standard of care requires the surgeon to either convert to open surgery or perform a subtotal (partial) cholecystectomy rather than risk a bile duct injury.
+
+IV. OPINIONS
+
+Based on my review of the available materials, I hold the following opinions to a reasonable degree of medical certainty:
+
+OPINION 1: Dr. Thornton breached the standard of care.
+
+Dr. Thornton's operative report for the January 15, 2026 procedure does not document achievement of the critical view of safety. The report states only that "Calot's triangle dissected. Cystic duct and cystic artery identified, clipped x3 and divided." This language is insufficient and does not confirm that the three criteria of CVS were met.
+
+The findings at the January 20 reconstructive surgery by Dr. Alvarez definitively establish that the common bile duct was misidentified as the cystic duct. The clips were found on the proximal CBD stump, and the cystic duct stump was found separately, unclipped. This injury pattern is pathognomonic for failure to achieve CVS.
+
+Had Dr. Thornton properly achieved the critical view of safety—which requires visualization of only two structures entering the gallbladder—he would have recognized that the structure he clipped and transected was the common bile duct, not the cystic duct.
+
+OPINION 2: Dr. Thornton should have performed an intraoperative cholangiogram.
+
+Mrs. Martinez has a BMI of 31.2 and a history of recurrent biliary colic, which can cause scarring in the hepatocystic triangle. If there was any difficulty identifying the anatomy—and the injury pattern suggests there was—Dr. Thornton should have performed an IOC to confirm the identity of the structures before clipping.
+
+OPINION 3: The injury was not recognized intraoperatively, representing a second departure from the standard of care.
+
+The standard of care requires the surgeon to inspect the operative field for any signs of bile duct injury before concluding the procedure. A Class E2 injury (complete transection) should have been evident from bile staining, abnormal anatomy, or the absence of the expected ductal stump. Failure to recognize such an injury intraoperatively is itself a breach of the standard of care.
+
+OPINION 4: Dr. Thornton's breach directly caused Mrs. Martinez's injuries.
+
+Had Dr. Thornton achieved CVS, the bile duct injury would not have occurred. Had he performed IOC, the injury likely would have been recognized and repaired at the initial surgery, avoiding the catastrophic cascade of biliary peritonitis, sepsis, ICU admission, and the need for Roux-en-Y reconstruction.
+
+OPINION 5: Coastal Healthcare Systems bears responsibility for systemic failures.
+
+The credentialing records reveal two prior bile duct injury incidents involving Dr. Thornton in the 36 months preceding Mrs. Martinez's surgery. The bile duct injury rate for an individual surgeon should be less than 0.5% (approximately 1 in 200 cases). Two injuries in a 36-month period is a statistical red flag that should have triggered enhanced peer review, proctoring, or restriction of privileges.
+
+The peer review outcomes of "counseled" and "no action" for these prior incidents fall below the standard for surgical quality assurance programs. At a minimum, Coastal should have:
+   - Required Dr. Thornton to undergo proctored cases
+   - Mandated IOC for all of Dr. Thornton's cholecystectomies
+   - Required documentation of CVS with intraoperative photographs
+   - Considered restriction or suspension of cholecystectomy privileges
+
+V. PROGNOSIS
+
+Mrs. Martinez has suffered a life-altering injury. The Roux-en-Y hepaticojejunostomy, while the best available repair, creates permanent anatomical changes. She faces:
+
+   - 10-30% lifetime risk of anastomotic stricture requiring intervention
+   - Ongoing risk of ascending cholangitis (recurrent bile duct infections)
+   - Small but real risk of secondary biliary cirrhosis
+   - Need for annual or semi-annual liver function monitoring indefinitely
+   - Psychological impact: anxiety, PTSD symptoms related to medical procedures
+
+VI. CONCLUSION
+
+Dr. Thornton's performance on January 15, 2026 fell below the standard of care in multiple respects. Coastal Healthcare Systems failed in its duty to ensure patient safety through adequate credentialing and quality assurance. Mrs. Martinez's injuries were entirely preventable.
+
+I am prepared to testify to these opinions at deposition and trial.
+
+
+/s/ David R. Williams, M.D., FACS
+Date: March 1, 2026

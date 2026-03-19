@@ -1,0 +1,96 @@
+EMPLOYMENT AGREEMENT
+
+This Employment Agreement ("Agreement") is entered into as of March 1, 2022, by and between:
+
+TechVault Solutions, Inc., a Delaware corporation ("Company")
+and
+Kevin P. Zhang, an individual residing in Santa Clara County, California ("Employee")
+
+═══════════════════════════════════════════════════════════════
+
+1. POSITION AND DUTIES
+
+1.1. Employee is hired as Senior Cryptographic Engineer, reporting to the Chief Technology Officer.
+
+1.2. Employee's primary responsibilities include: design and implementation of encryption algorithms, code review, security architecture, and mentoring junior engineers.
+
+1.3. Employee agrees to devote full working time and attention to the business of the Company during employment.
+
+2. COMPENSATION
+
+2.1. Base Salary: $195,000 per year, paid semi-monthly.
+2.2. Annual Bonus: Eligible for discretionary bonus up to 20% of base salary.
+2.3. Equity: 25,000 stock options, vesting over 4 years with a 1-year cliff, per the Company's 2020 Equity Incentive Plan.
+
+3. CONFIDENTIAL INFORMATION
+
+3.1. Employee acknowledges that during employment, Employee will have access to and become acquainted with Confidential Information, including but not limited to: source code, algorithms, encryption methods, key derivation functions, customer lists, pricing strategies, business plans, product roadmaps, and technical specifications.
+
+3.2. "Confidential Information" means any data or information, oral or written, relating to the Company's business that is not generally known to the public, regardless of whether such information is marked "confidential."
+
+3.3. Employee agrees not to, during or after employment:
+    (a) Disclose any Confidential Information to any person outside the Company;
+    (b) Use any Confidential Information for any purpose other than the Company's benefit;
+    (c) Remove any Confidential Information from Company premises or systems without written authorization;
+    (d) Copy, download, or transfer any Confidential Information to personal devices or accounts.
+
+3.4. Employee's obligations under this Section 3 survive termination of employment and continue indefinitely with respect to trade secrets and for five (5) years with respect to other Confidential Information.
+
+4. INTELLECTUAL PROPERTY
+
+4.1. All inventions, discoveries, designs, algorithms, source code, and other intellectual property created by Employee during employment, whether or not during working hours, that relate to the Company's business or result from the use of Company resources, are the sole property of the Company ("Work Product").
+
+4.2. Employee hereby assigns to the Company all rights, title, and interest in and to all Work Product.
+
+4.3. Employee agrees to execute any documents necessary to perfect the Company's ownership of Work Product.
+
+5. RETURN OF MATERIALS
+
+5.1. Upon termination of employment for any reason, Employee shall immediately:
+    (a) Return all Company property, including laptops, phones, access cards, and documents;
+    (b) Delete all Company data from personal devices and accounts;
+    (c) Certify in writing that all Company materials have been returned and all copies destroyed.
+
+6. NON-SOLICITATION
+
+6.1. For a period of twelve (12) months following termination of employment, Employee shall not, directly or indirectly:
+    (a) Solicit any employee of the Company to leave the Company's employment;
+    (b) Solicit any customer or prospective customer of the Company with whom Employee had contact during the last 12 months of employment.
+
+7. NON-COMPETITION
+
+7.1. [INTENTIONALLY OMITTED — Not enforceable under California law per Cal. Bus. & Prof. Code § 16600]
+
+8. TERMINATION
+
+8.1. Employment is at-will. Either party may terminate this Agreement at any time, with or without cause, upon two (2) weeks' written notice.
+
+8.2. Upon termination, Employee is entitled to: (a) accrued salary through the termination date; (b) accrued but unused vacation; (c) any vested equity per the Equity Incentive Plan.
+
+9. REMEDIES
+
+9.1. Employee acknowledges that any breach of Sections 3, 4, 5, or 6 would cause irreparable harm to the Company for which monetary damages would be inadequate.
+
+9.2. The Company shall be entitled to seek injunctive relief, specific performance, and any other equitable remedies in addition to all other remedies available at law.
+
+10. GOVERNING LAW
+
+10.1. This Agreement is governed by the laws of the State of California.
+
+11. ENTIRE AGREEMENT
+
+11.1. This Agreement, together with the Proprietary Information and Inventions Assignment Agreement executed contemporaneously herewith, constitutes the entire agreement between the parties.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first written above.
+
+TECHVAULT SOLUTIONS, INC.
+
+By: /s/ Patricia Okonkwo
+    Patricia Okonkwo, Chief Technology Officer
+    Date: March 1, 2022
+
+EMPLOYEE
+
+By: /s/ Kevin P. Zhang
+    Kevin P. Zhang
+    Date: March 1, 2022

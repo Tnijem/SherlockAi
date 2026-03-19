@@ -1,0 +1,93 @@
+UNITED STATES DISTRICT COURT
+NORTHERN DISTRICT OF CALIFORNIA
+SAN JOSE DIVISION
+
+Case No. 26-CV-02391-EJD
+
+TECHVAULT SOLUTIONS, INC., Plaintiff,
+v.
+NEXGEN DATA SYSTEMS, LLC, and KEVIN P. ZHANG, Defendants.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MOTION FOR TEMPORARY RESTRAINING ORDER
+AND PRELIMINARY INJUNCTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Plaintiff TechVault Solutions, Inc. moves this Court for entry of a temporary restraining order and preliminary injunction pursuant to Fed. R. Civ. P. 65 and the Defend Trade Secrets Act, 18 U.S.C. § 1836(b)(3)(A).
+
+I. INTRODUCTION
+
+TechVault seeks emergency injunctive relief to prevent the continued use and dissemination of its trade secrets — the crown jewels of its business — by Defendants NexGen and Zhang. The forensic evidence is overwhelming: Zhang systematically exfiltrated TechVault's entire VaultLock codebase and proprietary KDA-7 encryption algorithm before defecting to competitor NexGen, which announced a suspiciously similar product just weeks later.
+
+Without immediate relief, TechVault faces irreparable harm: the permanent destruction of its competitive advantage in a market where first-mover advantage and technological superiority are everything.
+
+II. STATEMENT OF FACTS
+
+[Incorporated from Complaint and supported by the following declarations:
+- Declaration of Patricia Okonkwo, CTO of TechVault (Exhibit A)
+- Declaration of Dr. Alicia Reeves, Digital Forensics Expert (Exhibit B)
+- Declaration of Dr. Nathan Cross, Cryptography Expert (Exhibit C)]
+
+III. LEGAL STANDARD
+
+A TRO and preliminary injunction are warranted where the movant establishes: (1) likelihood of success on the merits; (2) likelihood of irreparable harm; (3) the balance of equities tips in its favor; and (4) an injunction is in the public interest. Winter v. NRDC, 555 U.S. 7, 20 (2008).
+
+Under the DTSA, the court may grant injunctive relief to "prevent any actual or threatened misappropriation" on such terms as the court deems reasonable. 18 U.S.C. § 1836(b)(3)(A).
+
+IV. ARGUMENT
+
+A. Likelihood of Success on the Merits
+
+1. TechVault's VaultLock technology and KDA-7 algorithm are trade secrets.
+   - $12 million and 47,000 engineering hours invested
+   - Protected by access controls, NDAs, air-gapped development, and security protocols
+   - Derives independent economic value from not being generally known
+
+2. Zhang misappropriated these trade secrets.
+   - Forensic evidence: 3,847 files cloned, USB transfer, 23 emails to personal account
+   - Timeline: Applied to NexGen before resigning, exfiltrated data during notice period
+   - False exit interview certification
+   - Installation of secure deletion software to cover tracks
+
+3. NexGen acquired and used the trade secrets.
+   - Announced Fortress product 5 weeks after hiring Zhang
+   - Fortress matches VaultLock capabilities within 3% on benchmarks
+   - Independent development would take 18-24 months minimum
+   - NexGen's marketing language mirrors TechVault internal descriptions
+
+B. Irreparable Harm
+
+Trade secret misappropriation, by its nature, causes irreparable harm. Once a trade secret is disclosed or used by a competitor, the harm cannot be undone by monetary damages alone. See Ruckelshaus v. Monsanto Co., 467 U.S. 986, 1012 (1984).
+
+Specifically:
+- VaultLock's competitive advantage will be permanently destroyed
+- Customer confidence will be undermined
+- TechVault's $12 million R&D investment will be diminished
+- The market window for VaultLock's next-generation features will close
+
+C. Balance of Equities
+
+The balance overwhelmingly favors TechVault. NexGen can continue operating its existing product lines — only the allegedly stolen Fortress product would be enjoined. Zhang's employment at NexGen need not be terminated, but he should be prohibited from working on any encryption-related projects.
+
+D. Public Interest
+
+The public interest favors protecting trade secrets and enforcing contractual obligations. Allowing companies to benefit from stolen technology undermines innovation and the incentive to invest in R&D.
+
+V. REQUESTED RELIEF
+
+TechVault respectfully requests that this Court enter an order:
+
+1. Prohibiting NexGen from marketing, selling, licensing, or further developing NexGen Fortress;
+2. Requiring NexGen to sequester all code, documents, and materials related to Fortress pending trial;
+3. Prohibiting Zhang from disclosing any TechVault trade secrets or working on encryption-related projects at NexGen;
+4. Requiring Defendants to return or destroy all copies of TechVault's trade secrets;
+5. Appointing a Special Master to oversee compliance;
+6. Requiring expedited discovery on the scope of misappropriation.
+
+Respectfully submitted,
+
+BRENNAN, ORTIZ & CALLOWAY LLP
+
+By: /s/ Margaret A. Brennan
+    Margaret A. Brennan, Esq.
+    Date: February 28, 2026

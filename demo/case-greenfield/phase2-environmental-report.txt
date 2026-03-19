@@ -1,0 +1,232 @@
+PHASE II ENVIRONMENTAL SITE ASSESSMENT
+
+Site: 1500 Industrial Boulevard, Macon, Georgia 31201
+      Bibb County Tax Parcel No. 123-456-789
+
+Prepared for: Riverside Development Group, Inc.
+Prepared by: Southern Environmental Consultants, LLC
+Project No.: SEC-2025-4781
+Date: October 28, 2025
+
+═══════════════════════════════════════════════════════════════
+
+1.0 EXECUTIVE SUMMARY
+
+Southern Environmental Consultants, LLC ("SEC") was retained by Riverside Development
+Group, Inc. ("Client") to conduct a Phase II Environmental Site Assessment ("Phase II ESA")
+of the property located at 1500 Industrial Boulevard, Macon, Georgia 31201 (the "Site").
+
+This Phase II ESA was conducted in response to Recognized Environmental Conditions ("RECs")
+identified in our Phase I ESA dated October 3, 2025, including:
+
+  REC-1: Former textile manufacturing operations (1968-2003) with potential for chemical
+         releases from dyeing and finishing processes
+  REC-2: Former UST locations — closure report from 2004 indicated "minor staining"
+         but no confirmation sampling was performed at that time
+  REC-3: Undocumented fill material observed in the northeastern portion of the Site
+
+CRITICAL FINDINGS:
+
+Our investigation revealed significant soil and groundwater contamination requiring
+regulatory notification and potential remediation:
+
+  ▸ Tetrachloroethylene (PCE) in groundwater at 78 μg/L — 15.6x the EPA MCL of 5 μg/L
+  ▸ Trichloroethylene (TCE) in groundwater at 23 μg/L — 4.6x the EPA MCL of 5 μg/L
+  ▸ Petroleum hydrocarbons in soil at former UST location — up to 3,400 mg/kg TPH
+  ▸ Lead in soil in fill area — up to 890 mg/kg (above EPA residential RSL of 400 mg/kg)
+  ▸ Hexavalent chromium in soil near former dye building — 42 mg/kg
+
+Estimated remediation cost: $1.2 million to $2.8 million depending on selected approach.
+
+═══════════════════════════════════════════════════════════════
+
+2.0 SITE DESCRIPTION AND HISTORY
+
+2.1 Current Conditions
+The Site consists of approximately 12.4 acres improved with a 185,000 square foot
+industrial building constructed in 1968, with additions in 1978 and 1992. The building
+is currently vacant. A paved parking area (approximately 2 acres) is located on the
+western side. The eastern portion includes a loading dock area and former chemical
+storage building (approximately 3,000 sf).
+
+2.2 Historical Operations
+1968-2003: Georgia Textile Mills, Inc. operated a textile manufacturing facility
+including dyeing, finishing, and printing operations. Chemicals used included:
+  - Tetrachloroethylene (PCE) — dry cleaning and degreasing of fabrics
+  - Various dyes containing heavy metals (chromium, lead, cadmium)
+  - Petroleum products (diesel fuel, hydraulic oils)
+  - Acids and bases for pH adjustment of dyeing processes
+
+2003-2018: Southeast Logistics, LLC operated a warehouse/distribution center.
+Two 10,000-gallon underground storage tanks (diesel fuel) were removed in 2004.
+
+2018-Present: Property vacant.
+
+═══════════════════════════════════════════════════════════════
+
+3.0 SCOPE OF WORK
+
+3.1 Soil Investigation
+  - 24 soil borings (SB-1 through SB-24) advanced to depths of 10-25 feet below
+    ground surface (bgs) using hollow-stem auger
+  - 72 soil samples collected at various depths
+  - Samples analyzed for: VOCs (EPA Method 8260), SVOCs (EPA Method 8270),
+    RCRA 8 Metals (EPA Method 6010/7471), TPH-GRO/DRO (EPA Methods 8015/8015),
+    Hexavalent Chromium (EPA Method 7196A)
+
+3.2 Groundwater Investigation
+  - 6 monitoring wells installed (MW-1 through MW-6) at 20-30 feet bgs
+  - Groundwater encountered at approximately 15 feet bgs
+  - Samples analyzed for: VOCs, SVOCs, Metals, TPH
+
+3.3 Soil Gas Investigation
+  - 8 soil vapor points (SV-1 through SV-8) installed at 5 feet bgs
+  - Analyzed for VOCs via EPA Method TO-15
+
+═══════════════════════════════════════════════════════════════
+
+4.0 RESULTS
+
+4.1 CHLORINATED SOLVENTS (PCE/TCE) — GROUNDWATER
+
+Location    Depth(ft)  PCE (μg/L)  TCE (μg/L)  cis-1,2-DCE (μg/L)
+─────────────────────────────────────────────────────────────────────
+MW-1        22         78          23           45
+MW-2        20         34          12           28
+MW-3        25         8.2         3.1          6.7
+MW-4        22         2.1         ND           1.4
+MW-5        20         ND          ND           ND
+MW-6        20         1.8         ND           ND
+─────────────────────────────────────────────────────────────────────
+EPA MCL:               5           5            70
+
+PCE and TCE exceed Maximum Contaminant Levels (MCLs) at MW-1, MW-2, and MW-3.
+The contamination plume appears centered near the former chemical storage building
+(eastern portion of Site) and extends approximately 400 feet to the north-northwest,
+following groundwater flow direction.
+
+The presence of cis-1,2-dichloroethylene (cis-1,2-DCE) indicates natural reductive
+dechlorination of PCE/TCE is occurring, which is a favorable indicator for potential
+monitored natural attenuation.
+
+4.2 PETROLEUM HYDROCARBONS — SOIL
+
+Location    Depth(ft)  TPH-DRO (mg/kg)  TPH-GRO (mg/kg)  Benzene (mg/kg)
+─────────────────────────────────────────────────────────────────────────────
+SB-7        6          3,400            180               1.2
+SB-7        10         1,200            45                0.4
+SB-8        6          890              34                0.2
+SB-8        10         120              ND                ND
+SB-9        6          45               ND                ND
+─────────────────────────────────────────────────────────────────────────────
+GA EPD RSL:            340 (res)        NA                0.52
+
+Petroleum contamination at the former UST locations (SB-7, SB-8) significantly exceeds
+Georgia EPD Residential Risk-Based Screening Levels. The 2004 UST closure report noted
+"minor soil staining" but no confirmation sampling was conducted — the contamination
+was never properly characterized or remediated.
+
+4.3 HEAVY METALS — SOIL
+
+Location    Depth(ft)  Lead (mg/kg)  Hex. Chromium (mg/kg)  Cadmium (mg/kg)
+──────────────────────────────────────────────────────────────────────────────
+SB-15       2          890           42                     8.4
+SB-16       2          620           28                     5.1
+SB-17       2          340           15                     2.8
+SB-18       2          180           8                      1.2
+SB-19       2          45            2                      0.3
+──────────────────────────────────────────────────────────────────────────────
+EPA RSL:               400 (res)     0.29 (res)             7.0 (res)
+
+Elevated lead and hexavalent chromium concentrations are present in the northeastern
+fill area and near the former dye building. Lead exceeds the EPA residential RSL at
+SB-15 and SB-16. Hexavalent chromium exceeds residential RSLs at all locations tested
+near the dye building.
+
+This is consistent with disposal of dye waste and/or chromium-containing chemicals
+during the textile manufacturing era (1968-2003).
+
+4.4 SOIL VAPOR — VAPOR INTRUSION RISK
+
+Location  PCE (μg/m³)  TCE (μg/m³)  Risk Assessment
+──────────────────────────────────────────────────────
+SV-1      480          120          EXCEEDS screening levels
+SV-2      340          85           EXCEEDS screening levels
+SV-3      210          45           EXCEEDS screening levels
+SV-4      45           12           Below screening levels
+SV-5      12           ND           Below screening levels
+SV-6-8    ND           ND           Below screening levels
+──────────────────────────────────────────────────────
+
+Soil vapor concentrations in the eastern portion of the Site significantly exceed
+EPA vapor intrusion screening levels for both residential and commercial/industrial
+use. Any redevelopment that includes enclosed structures in this area will require
+vapor intrusion mitigation systems (sub-slab depressurization or vapor barriers).
+
+═══════════════════════════════════════════════════════════════
+
+5.0 REGULATORY IMPLICATIONS
+
+5.1 Georgia EPD Notification
+    Under Georgia Hazardous Site Response Act (HSRA), O.C.G.A. § 12-8-90 et seq.,
+    the property owner must notify Georgia EPD within 30 days of discovery of
+    contamination exceeding reportable quantities. This notification is REQUIRED.
+
+5.2 CERCLA Liability
+    The contamination from textile manufacturing operations likely pre-dates current
+    ownership. However, Greenfield Industrial Partners as current owner may have
+    liability under CERCLA § 107(a)(1) as a "current owner or operator."
+
+    Riverside Development Group should evaluate:
+    - CERCLA "innocent landowner" defense (42 U.S.C. § 9601(35))
+    - "Bona fide prospective purchaser" defense (42 U.S.C. § 9601(40))
+    - Georgia Brownfield program enrollment for liability protection
+
+5.3 Vapor Intrusion Pathway
+    Development of residential units in the eastern portion of the Site will
+    require vapor intrusion mitigation. EPA guidance (2015 OSWER Technical Guide)
+    and Georgia EPD Rule 391-3-19 apply.
+
+═══════════════════════════════════════════════════════════════
+
+6.0 REMEDIATION COST ESTIMATES
+
+Option A: Full excavation and off-site disposal (soil) + pump-and-treat (groundwater)
+  Estimated cost: $2.4 - $2.8 million
+  Timeline: 18-24 months active remediation + 3-5 years monitoring
+
+Option B: In-situ chemical oxidation (soil) + monitored natural attenuation (groundwater)
+  Estimated cost: $1.2 - $1.6 million
+  Timeline: 6-12 months active treatment + 5-10 years monitoring
+
+Option C: Georgia Brownfield program (risk-based approach with institutional controls)
+  Estimated cost: $800,000 - $1.2 million
+  Timeline: 12-18 months + long-term monitoring
+  Requires: Land use restrictions (may limit residential development)
+
+═══════════════════════════════════════════════════════════════
+
+7.0 CONCLUSIONS AND RECOMMENDATIONS
+
+1. The Site has significant environmental contamination from historical textile
+   manufacturing operations and inadequately closed USTs.
+
+2. The contamination was NOT disclosed by Seller in the Purchase and Sale Agreement.
+   Seller's environmental representations (Section 2.3) appear to be materially
+   inaccurate, particularly representations (a) and (d).
+
+3. We recommend:
+   (a) Immediate notification to Georgia EPD per HSRA requirements
+   (b) Do NOT close on the purchase until contamination is fully characterized
+       and remediation responsibility is allocated
+   (c) Re-negotiate purchase price to account for remediation costs ($1.2-$2.8M)
+   (d) Require Seller to escrow remediation funds or obtain environmental insurance
+   (e) Evaluate Georgia Brownfield program for liability protection
+
+Prepared by:
+
+/s/ Dr. James Hartwell, P.E., P.G.
+Principal Environmental Engineer
+Southern Environmental Consultants, LLC
+GA PE License No. 34567
+Date: October 28, 2025

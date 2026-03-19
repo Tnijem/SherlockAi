@@ -1,0 +1,124 @@
+REYNOLDS, PARK & MCALLISTER LLP
+Attorneys at Law
+3344 Peachtree Road NE, Suite 1200
+Atlanta, Georgia 30326
+Tel: (404) 555-0267 | Fax: (404) 555-0268
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+November 5, 2025
+
+VIA CERTIFIED MAIL AND EMAIL
+
+Marcus Webb, Managing Member
+Greenfield Industrial Partners, LLC
+800 Peachtree Street NE, Suite 2400
+Atlanta, Georgia 30308
+
+Re: Material Misrepresentation — 1500 Industrial Boulevard, Macon, GA
+    Commercial Purchase and Sale Agreement dated September 15, 2025
+
+Dear Mr. Webb:
+
+This firm represents Riverside Development Group, Inc. ("Riverside") in connection
+with the above-referenced transaction. I write to inform you that the Phase II
+Environmental Site Assessment of the Property has revealed severe contamination
+that was not disclosed and is directly contrary to the environmental representations
+made by Greenfield Industrial Partners, LLC ("Greenfield") in the Purchase Agreement.
+
+ENVIRONMENTAL FINDINGS
+
+Southern Environmental Consultants, LLC completed a Phase II ESA on October 28, 2025,
+which revealed the following contamination at the Property:
+
+  • Tetrachloroethylene (PCE) in groundwater at 15.6 times the EPA drinking water
+    standard (78 μg/L vs. MCL of 5 μg/L)
+  • Trichloroethylene (TCE) in groundwater at 4.6 times the EPA standard
+  • Petroleum hydrocarbons in soil at 10 times the Georgia residential screening level
+    (3,400 mg/kg at the former UST locations)
+  • Lead contamination at 2.2 times the EPA residential screening level (890 mg/kg)
+  • Hexavalent chromium at 145 times the residential screening level (42 mg/kg)
+  • Vapor intrusion risk requiring mitigation for any enclosed structures
+
+Estimated remediation costs range from $1.2 million to $2.8 million.
+
+BREACH OF REPRESENTATIONS
+
+Section 2.3 of the Purchase Agreement contains specific environmental representations.
+Our investigation indicates that at least two of these representations are materially false:
+
+  Section 2.3(a): Seller represented that "No Hazardous Substances have been released,
+  stored, or disposed of on the Property in violation of applicable Environmental Laws."
+
+  FACT: The Property has extensive contamination from chlorinated solvents, petroleum
+  hydrocarbons, lead, and hexavalent chromium — all Hazardous Substances under CERCLA
+  and Georgia HSRA — from decades of textile manufacturing and inadequately closed USTs.
+
+  Section 2.3(d): Seller represented that "All underground storage tanks on the Property
+  have been properly removed or closed in accordance with applicable regulations."
+
+  FACT: The 2004 UST closure report provided by Seller documented "minor soil staining"
+  but no confirmation sampling was performed. Our Phase II ESA confirmed petroleum
+  contamination at 10x the applicable screening level at the former UST locations.
+  The closure was NOT "in accordance with applicable regulations" — Georgia EPD UST
+  regulations (Rules 391-3-15-.10) require confirmation sampling to demonstrate that
+  contamination does not exceed applicable standards.
+
+Additionally, the Phase I ESA prepared for Greenfield's 2020 acquisition of the Property
+(which Greenfield provided to Riverside) identified these same RECs. It is difficult to
+understand how Greenfield could represent "no knowledge" of potential contamination when
+its own Phase I ESA flagged the risks.
+
+DEMAND
+
+Riverside hereby demands that Greenfield, within ten (10) business days of this letter:
+
+  1. ACKNOWLEDGE the material misrepresentation in the environmental warranties;
+
+  2. AGREE to reduce the purchase price by $2,800,000 (reflecting the high-end
+     remediation cost estimate) to a revised price of $1,400,000; OR alternatively,
+
+  3. AGREE to escrow $2,800,000 from the purchase proceeds to fund remediation,
+     with terms to be negotiated; OR alternatively,
+
+  4. AGREE to conduct remediation at Seller's expense prior to Closing, with Closing
+     date extended accordingly;
+
+  5. In any scenario, AGREE to full environmental indemnification of Riverside with
+     no cap and a 10-year survival period;
+
+  6. NOTIFY Georgia EPD of the contamination as required by HSRA within 30 days
+     of the Phase II ESA (by November 27, 2025).
+
+RESERVATION OF RIGHTS
+
+If Greenfield fails to respond satisfactorily within the specified timeframe, Riverside
+reserves all rights and remedies, including but not limited to:
+
+  • Termination of the Purchase Agreement and return of the $210,000 Earnest Money
+    deposit pursuant to Section 2.4;
+  • Claims for fraud and intentional misrepresentation;
+  • Claims for negligent misrepresentation;
+  • Claims for breach of contract and breach of warranty;
+  • Reporting the contamination to Georgia EPD, which may trigger enforcement action
+    against Greenfield as current property owner under HSRA and CERCLA;
+  • Seeking recovery of all due diligence costs incurred ($87,500 to date).
+
+Please be advised that the Due Diligence Period expires on November 14, 2025. If this
+matter is not resolved to Riverside's satisfaction prior to that date, Riverside will
+exercise its termination right.
+
+This letter shall not be construed as a waiver of any rights or remedies available to
+Riverside under the Purchase Agreement, at law, or in equity.
+
+Please direct all further communications to this office.
+
+Very truly yours,
+
+/s/ Angela Park
+Angela Park, Esq.
+Georgia Bar No. 567890
+apark@rpmlaw.com
+
+cc: David Chen, President, Riverside Development Group, Inc.
+    Southern Environmental Consultants, LLC (via email)

@@ -1,0 +1,159 @@
+MEDICAL RECORDS SUMMARY
+Patient: Maria Elena Martinez
+DOB: 04/12/1971
+Prepared by: Harrison, Cole & Associates, P.A.
+
+═══════════════════════════════════════════════════════════════
+
+CHRONOLOGY OF CARE
+
+12/15/2025 — Dr. Susan Chen (PCP), Internal Medicine Associates
+  Chief complaint: Recurrent right upper quadrant pain after meals
+  Assessment: Symptomatic cholelithiasis
+  Plan: Referral to general surgery for consultation
+
+12/22/2025 — Dr. James Thornton, Coastal Regional Medical Center
+  Surgical consultation: History of 4-5 episodes of biliary colic over 6 months
+  Reviewed labs: LFTs within normal limits, lipase normal
+  Ordered: Abdominal ultrasound
+  Plan: Elective laparoscopic cholecystectomy pending imaging
+
+12/28/2025 — Coastal Regional Radiology Department
+  Abdominal Ultrasound
+  Findings: Multiple gallstones, largest 1.2 cm. Gallbladder wall thickness 3mm (normal).
+  Common bile duct measured 4mm (normal). No intrahepatic ductal dilation.
+  Impression: Cholelithiasis without cholecystitis. No CBD abnormality.
+  Radiologist: Dr. Mark Espinoza
+
+01/08/2026 — Pre-operative clearance, Dr. Susan Chen
+  Medical history: Hypertension (controlled on lisinopril 10mg), Type 2 diabetes (A1c 6.8),
+  BMI 31.2, no prior abdominal surgeries
+  EKG: Normal sinus rhythm
+  CBC, CMP, PT/INR: All within normal limits
+  Cleared for surgery
+
+01/15/2026 — OPERATIVE REPORT (Dr. James Thornton)
+  Procedure: Laparoscopic cholecystectomy
+  Anesthesia: General endotracheal
+  Duration: 47 minutes
+  EBL: Minimal (approximately 25 mL)
+
+  OPERATIVE NOTE (verbatim):
+  "Patient positioned supine. Standard 4-port laparoscopic approach. Gallbladder identified
+  with omental adhesions taken down. Calot's triangle dissected. Cystic duct and cystic
+  artery identified, clipped x3 and divided. Gallbladder dissected from liver bed using
+  electrocautery. Hemostasis achieved. Gallbladder extracted via umbilical port in retrieval
+  bag. Ports removed under visualization. Fascia closed at umbilical site. Skin closed with
+  subcuticular sutures. Patient to recovery in stable condition."
+
+  *** NOTE: No mention of critical view of safety (CVS) achievement ***
+  *** NOTE: No intraoperative cholangiogram performed ***
+  *** NOTE: No documentation of difficulty or unusual anatomy ***
+
+01/16/2026 — Discharge Summary (Coastal Regional Medical Center)
+  Patient discharged home in stable condition
+  Discharge diagnosis: Status post laparoscopic cholecystectomy
+  Medications: Hydrocodone/APAP 5/325 #20, ibuprofen 600mg PRN
+  Follow-up: Dr. Thornton office in 2 weeks
+  No drain placed
+
+01/19/2026 — Emergency Department (Coastal Regional Medical Center)
+  Arrival: 02:47 AM via private vehicle
+  Chief complaint: Severe abdominal pain, yellowing of skin and eyes, fever
+
+  Vitals: T 102.4°F, HR 118, BP 88/54, RR 22, SpO2 96% on RA
+
+  Physical exam: Acute distress. Jaundiced. Abdomen distended, diffusely tender with
+  guarding and rebound. Surgical incision sites without erythema or drainage.
+
+  Labs:
+    WBC: 22,400 (H)
+    AST: 847 (H) [normal 10-40]
+    ALT: 912 (H) [normal 7-56]
+    Total bilirubin: 8.7 (H) [normal 0.1-1.2]
+    Direct bilirubin: 6.9 (H)
+    Alkaline phosphatase: 534 (H)
+    Lipase: 67 (normal)
+    Lactate: 4.2 (H) [normal 0.5-2.0]
+    BUN: 38 (H)
+    Creatinine: 1.8 (H) [baseline 0.9]
+    INR: 1.6 (H)
+
+  CT Abdomen/Pelvis with contrast:
+    Large volume free fluid in abdomen. Pneumobilia. No identifiable common bile duct
+    continuity. Surgical clips noted in the porta hepatis region at a location inconsistent
+    with typical cystic duct clip placement. Findings concerning for bile duct injury.
+    Radiologist: Dr. Carla Fuentes
+
+  MRCP (expedited):
+    Complete transection of the common bile duct approximately 1 cm below the hepatic
+    confluence. Proximal biliary dilation. Large biloma in the right paracolic gutter.
+    Strasberg Class E2 injury.
+    Radiologist: Dr. Mark Espinoza
+
+  Assessment: Bile duct injury with biliary peritonitis, sepsis
+  Plan: Emergent surgical consultation, hepatobiliary surgery
+
+01/20/2026 — OPERATIVE REPORT (Dr. Patricia Alvarez, Hepatobiliary Surgery)
+  Procedure: Exploratory laparotomy, lysis of adhesions, evacuation of biloma (estimated
+  1200 mL of bile), hepaticojejunostomy (Roux-en-Y reconstruction)
+
+  Duration: 6 hours 32 minutes
+  EBL: 800 mL; 2 units PRBC transfused
+
+  Findings: Complete transection of common bile duct. Surgical clips identified on the
+  proximal CBD stump (NOT on the cystic duct as intended). Cystic duct stump identified
+  separately, unclipped, with bile leaking freely. Extensive biliary peritonitis with
+  inflammatory changes throughout the right upper quadrant.
+
+  "It is my opinion that the common bile duct was misidentified as the cystic duct during
+  the initial cholecystectomy. The clips were placed on the CBD rather than the cystic duct.
+  The injury pattern is consistent with failure to achieve the critical view of safety."
+
+  — Dr. Patricia Alvarez
+
+01/20 - 01/28/2026 — ICU Course
+  Septic shock requiring vasopressors (norepinephrine) for 4 days
+  Acute kidney injury (creatinine peaked at 3.4), resolved without dialysis
+  Percutaneous transhepatic biliary drain placed 01/23 by interventional radiology
+  Broad-spectrum antibiotics (meropenem + vancomycin)
+  TPN for nutritional support (NPO for 9 days)
+
+01/28 - 02/12/2026 — Step-down Unit
+  Gradual improvement, transitioned to oral diet
+  Biliary drain output decreasing
+  Physical therapy initiated (significant deconditioning)
+
+02/12/2026 — Discharge
+  Discharged to home with home health nursing
+  Biliary drain still in place (capped, for monitoring)
+  Follow-up: Dr. Alvarez 2 weeks, interventional radiology 4 weeks
+  Total hospitalization: 23 days
+
+ONGOING CARE (as of filing date)
+
+02/26/2026 — Dr. Alvarez follow-up
+  Healing well. Drain to be removed at next visit if cholangiogram clear.
+  "Patient will require lifelong monitoring of hepatic function and biliary system.
+  Risk of recurrent stricture at anastomosis site is 10-30% over her lifetime.
+  Risk of ascending cholangitis, secondary biliary cirrhosis."
+
+TOTAL MEDICAL EXPENSES TO DATE: $487,234.18
+  Coastal Regional — initial surgery + hospitalization:    $67,450
+  Coastal Regional — ER visit + reconstruction + ICU:     $312,890
+  Interventional radiology procedures:                     $45,200
+  Follow-up care, imaging, labs:                           $18,694
+  Home health nursing (4 weeks):                           $12,400
+  Physical therapy (12 sessions):                          $4,800
+  Medications:                                             $3,800
+  Future estimated care (Dr. Alvarez projection):          $22,000/year ongoing
+
+PRIOR INCIDENTS INVOLVING DR. THORNTON (from credentialing records obtained in discovery)
+
+  03/2024 — Bile duct injury during cholecystectomy on patient R.G. (age 67)
+            Resulted in surgical repair. Peer review outcome: "counseled"
+
+  09/2024 — Cystic duct stump leak following cholecystectomy on patient T.M. (age 43)
+            Required ERCP with stent placement. Peer review outcome: "no action"
+
+  Neither incident resulted in restriction of Dr. Thornton's surgical privileges.

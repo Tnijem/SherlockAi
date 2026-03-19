@@ -1,0 +1,135 @@
+UNITED STATES DISTRICT COURT
+SOUTHERN DISTRICT OF FLORIDA
+MIAMI DIVISION
+
+Case No. 26-CV-01847-RLR
+
+MARIA ELENA MARTINEZ,
+    Plaintiff,
+
+v.
+
+COASTAL HEALTHCARE SYSTEMS, INC.,
+d/b/a COASTAL REGIONAL MEDICAL CENTER,
+and DR. JAMES R. THORNTON, individually,
+    Defendants.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMPLAINT AND DEMAND FOR JURY TRIAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Plaintiff Maria Elena Martinez, by and through her undersigned attorneys, Harrison, Cole & Associates, P.A., hereby files this Complaint against Defendants Coastal Healthcare Systems, Inc. and Dr. James R. Thornton, and alleges as follows:
+
+PARTIES
+
+1. Plaintiff Maria Elena Martinez ("Mrs. Martinez") is a 54-year-old resident of Miami-Dade County, Florida. She is a retired school teacher who was admitted to Coastal Regional Medical Center on January 15, 2026 for a routine laparoscopic cholecystectomy (gallbladder removal).
+
+2. Defendant Coastal Healthcare Systems, Inc. ("Coastal") is a Florida corporation that owns and operates Coastal Regional Medical Center, a 312-bed acute care hospital located at 4500 Biscayne Boulevard, Miami, Florida 33137.
+
+3. Defendant Dr. James R. Thornton ("Dr. Thornton") is a board-certified general surgeon licensed to practice medicine in the State of Florida (License No. ME-87234). At all relevant times, Dr. Thornton was a credentialed member of the medical staff at Coastal Regional Medical Center with surgical privileges.
+
+JURISDICTION AND VENUE
+
+4. This Court has diversity jurisdiction under 28 U.S.C. § 1332 because the amount in controversy exceeds $75,000 and complete diversity exists between the parties.
+
+5. Venue is proper in this district under 28 U.S.C. § 1391(b) because a substantial part of the events giving rise to this claim occurred in Miami-Dade County.
+
+FACTUAL ALLEGATIONS
+
+6. On January 15, 2026, Mrs. Martinez was admitted to Coastal Regional Medical Center for an elective laparoscopic cholecystectomy. She had been experiencing recurrent gallbladder attacks and her primary care physician, Dr. Susan Chen, referred her to Dr. Thornton for surgical consultation.
+
+7. Pre-operative imaging, including an abdominal ultrasound dated December 28, 2025, revealed multiple gallstones with no abnormalities of the common bile duct.
+
+8. During the surgery on January 15, 2026, Dr. Thornton negligently transected the common bile duct (CBD) instead of the cystic duct, resulting in a Class E bile duct injury under the Strasberg classification system.
+
+9. The intraoperative injury was not recognized by Dr. Thornton during the initial procedure. Mrs. Martinez was discharged on January 16, 2026 with routine post-operative instructions.
+
+10. On January 19, 2026, Mrs. Martinez presented to the emergency department at Coastal Regional Medical Center with severe abdominal pain, jaundice, fever of 102.4°F, and elevated liver enzymes (AST 847, ALT 912, total bilirubin 8.7).
+
+11. Emergency imaging revealed a complete transection of the common bile duct with biliary peritonitis. Mrs. Martinez was emergently taken to surgery for repair.
+
+12. A hepaticojejunostomy (Roux-en-Y reconstruction) was performed by Dr. Patricia Alvarez, a hepatobiliary surgeon, on January 20, 2026. The surgery lasted approximately 6.5 hours.
+
+13. Mrs. Martinez remained hospitalized for 23 days following the reconstructive surgery, during which time she developed sepsis requiring ICU admission for 8 days, required a percutaneous transhepatic biliary drain, and suffered acute kidney injury.
+
+14. Upon information and belief, Dr. Thornton failed to perform a critical view of safety (CVS) during the initial laparoscopic cholecystectomy, which is the standard of care to prevent bile duct injuries.
+
+15. Upon information and belief, Dr. Thornton failed to obtain an intraoperative cholangiogram despite the patient's anatomy being unclear during the procedure.
+
+16. Dr. Thornton's operative note for the January 15 procedure is notably brief and does not document achievement of the critical view of safety or the use of any intraoperative imaging.
+
+COUNT I — MEDICAL MALPRACTICE (Against Dr. Thornton)
+
+17. Plaintiff incorporates paragraphs 1-16 as if fully set forth herein.
+
+18. Dr. Thornton owed a duty of care to Mrs. Martinez to perform the cholecystectomy in accordance with the applicable standard of care for board-certified general surgeons.
+
+19. Dr. Thornton breached that standard of care by:
+    (a) Failing to achieve a critical view of safety before clipping and transecting structures;
+    (b) Failing to obtain an intraoperative cholangiogram when anatomy was unclear;
+    (c) Misidentifying the common bile duct as the cystic duct;
+    (d) Failing to recognize the injury intraoperatively;
+    (e) Discharging the patient without appropriate post-operative monitoring.
+
+20. As a direct and proximate result of Dr. Thornton's negligence, Mrs. Martinez suffered severe physical injury, pain, and suffering, and will require lifelong medical monitoring.
+
+COUNT II — VICARIOUS LIABILITY (Against Coastal Healthcare Systems)
+
+21. Plaintiff incorporates paragraphs 1-20 as if fully set forth herein.
+
+22. At all relevant times, Dr. Thornton was acting within the course and scope of his employment or agency relationship with Coastal Healthcare Systems.
+
+23. Coastal Healthcare Systems is vicariously liable for the negligent acts and omissions of Dr. Thornton under the doctrine of respondeat superior.
+
+24. Alternatively, Coastal Healthcare Systems is directly liable under the doctrine of apparent agency because Mrs. Martinez reasonably believed Dr. Thornton was an employee or agent of the hospital.
+
+COUNT III — CORPORATE NEGLIGENCE (Against Coastal Healthcare Systems)
+
+25. Plaintiff incorporates paragraphs 1-24 as if fully set forth herein.
+
+26. Coastal Healthcare Systems had an independent, non-delegable duty to:
+    (a) Properly credential and grant privileges to competent physicians;
+    (b) Maintain adequate systems for surgical quality assurance;
+    (c) Ensure that patient safety protocols were followed in its operating rooms;
+    (d) Properly supervise the medical staff practicing in its facility.
+
+27. Upon information and belief, Coastal Healthcare Systems failed to conduct adequate peer review of Dr. Thornton's surgical outcomes despite at least two prior bile duct injury incidents involving Dr. Thornton in the preceding 36 months.
+
+DAMAGES
+
+28. As a result of Defendants' negligence, Mrs. Martinez has suffered and continues to suffer:
+    (a) Past and future medical expenses exceeding $487,000;
+    (b) Past and future lost wages;
+    (c) Physical pain and suffering;
+    (d) Mental anguish and emotional distress;
+    (e) Permanent physical impairment requiring lifelong medical monitoring;
+    (f) Loss of enjoyment of life.
+
+DEMAND FOR JURY TRIAL
+
+Plaintiff demands trial by jury on all issues so triable.
+
+PRAYER FOR RELIEF
+
+WHEREFORE, Plaintiff Maria Elena Martinez demands judgment against Defendants, jointly and severally, for:
+
+1. Compensatory damages in excess of $2,500,000;
+2. Punitive damages against both Defendants;
+3. Pre-judgment and post-judgment interest;
+4. Costs of suit and reasonable attorney's fees;
+5. Such other and further relief as this Court deems just and proper.
+
+Respectfully submitted,
+
+HARRISON, COLE & ASSOCIATES, P.A.
+
+By: /s/ Robert A. Harrison
+    Robert A. Harrison, Esq.
+    Florida Bar No. 456789
+    1200 Brickell Avenue, Suite 1800
+    Miami, Florida 33131
+    Telephone: (305) 555-0142
+    Email: rharrison@harrisoncole.com
+
+    Attorneys for Plaintiff
+    Date: February 10, 2026

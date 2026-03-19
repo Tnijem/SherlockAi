@@ -1,0 +1,173 @@
+DIGITAL FORENSICS REPORT
+
+Prepared for: Brennan, Ortiz & Calloway LLP
+Case: TechVault Solutions v. NexGen Data Systems et al.
+Date: February 18, 2026
+
+Forensic Examiner: Dr. Alicia M. Reeves
+Certification: EnCE, CFCE, GCFE
+Firm: CyberTrace Forensics, Inc.
+
+═══════════════════════════════════════════════════════════════
+
+EXECUTIVE SUMMARY
+
+CyberTrace Forensics was retained to conduct a forensic examination of (1) Kevin Zhang's TechVault-issued laptop (Dell Precision 5570, Asset Tag TV-ENG-2847), (2) TechVault's source code repository access logs, (3) TechVault's email server logs, and (4) network egress logs. This report details our findings regarding data exfiltration activities during the period November 1 - December 31, 2025.
+
+METHODOLOGY
+
+All examinations were conducted using industry-standard forensic tools:
+- EnCase Forensic v23.2 for disk imaging and analysis
+- Axiom Cyber v8.1 for artifact recovery
+- Splunk Enterprise for log analysis
+- Custom Python scripts for log correlation
+
+Chain of custody was maintained throughout. All evidence was hashed (SHA-256) at acquisition.
+
+═══════════════════════════════════════════════════════════════
+
+FINDINGS
+
+1. SOURCE CODE REPOSITORY ACCESS LOGS
+
+TechVault uses GitLab Enterprise (self-hosted, air-gapped) for source code management. Zhang's account (kzhang@techvault.com) had access to the following repositories:
+
+  - vaultlock-core (main encryption engine)
+  - vaultlock-kda7 (key derivation algorithm — RESTRICTED)
+  - vaultlock-api (customer-facing API)
+  - vaultlock-docs (internal architecture documentation)
+  - vaultlock-benchmarks (performance testing and results)
+
+ANOMALOUS ACTIVITY:
+
+November 18, 2025 (Monday), 11:14 PM - 2:47 AM (after hours):
+  - git clone of vaultlock-core: 2,134 files, 847 MB
+  - git clone of vaultlock-kda7: 423 files, 156 MB
+  - git clone of vaultlock-api: 891 files, 234 MB
+  - git clone of vaultlock-docs: 399 files, 89 MB
+  - TOTAL: 3,847 files, 1.33 GB
+
+  CONTEXT: Zhang's normal Git activity averaged 15-25 file operations per day.
+  This represents a 15,000% increase over normal activity.
+  Zhang had not cloned the full vaultlock-kda7 repository since initial onboarding in 2022.
+
+November 22, 2025 (Friday), 6:30 PM:
+  - Accessed vaultlock-docs/customers/ directory
+  - Downloaded deployment guides for: Meridian Bank, Apex Financial, Sterling Insurance,
+    Pacific Health Partners, Quantum Dynamics, and 10 additional enterprise clients
+  - These documents contain customer-specific configuration details, API keys (encrypted),
+    and integration architectures
+
+December 15, 2025 (Monday), 9:15 AM:
+  - Accessed vaultlock-kda7/spec/KDA7-SPECIFICATION-v4.2.pdf
+  - This document was last accessed by Zhang on June 3, 2025 (6+ months prior)
+  - The document is the complete mathematical specification of the KDA-7 algorithm
+  - Only 4 employees at TechVault have access to this file
+
+2. USB DEVICE CONNECTION
+
+December 2, 2025 (Tuesday), 12:34 PM:
+  Windows Event Log (ID 2003, 2100, 2101) records connection of:
+  - Device: Samsung T7 Shield Portable SSD, 2TB
+  - Serial: S6XNNS0WB00483K
+  - Drive letter assigned: E:\
+
+  File system journal analysis shows:
+  - 1.33 GB of data written to E:\ at 12:34-12:41 PM
+  - Folder structure created: E:\vault\, E:\vault\core\, E:\vault\kda7\, E:\vault\api\, E:\vault\docs\
+  - File timestamps match the November 18 git clone operation
+  - The USB device was disconnected at 12:43 PM (9 minutes total connection)
+
+  TechVault IT Policy 4.3.2 prohibits connection of personal storage devices.
+  DLP (Data Loss Prevention) software was installed but set to "monitor only" mode
+  for engineering workstations — it logged but did not block the transfer.
+
+3. EMAIL FORWARDING
+
+December 10, 2025 (Wednesday), various times:
+  TechVault Exchange Server logs show 23 emails sent from kzhang@techvault.com to
+  kzhang.personal@gmail.com between 8:00 AM and 5:30 PM:
+
+  Subject lines include:
+  - "VaultLock Architecture Overview v6.1" (3 attachments, 12.4 MB)
+  - "KDA-7 Performance Benchmarks Q3 2025" (1 attachment, 2.1 MB)
+  - "VaultLock Deployment Architecture - Enterprise" (2 attachments, 8.7 MB)
+  - "FIPS 140-3 Validation Report - VaultLock" (1 attachment, 4.3 MB)
+  - "Customer Integration Patterns - Reference Guide" (1 attachment, 6.8 MB)
+  - 18 additional emails containing architecture diagrams, code snippets, and
+    technical specifications
+
+  Total data sent: approximately 67 MB across 23 emails
+
+  NOTE: TechVault's email DLP policy flags external transmissions of files marked
+  "CONFIDENTIAL" but the system was configured with a 24-hour delay for engineering
+  accounts. The transmissions were flagged on December 11 but by then had already
+  been delivered.
+
+4. LAPTOP FORENSIC EXAMINATION
+
+Device: Dell Precision 5570 (Asset Tag TV-ENG-2847)
+OS: Windows 11 Enterprise
+Encrypted: BitLocker (decrypted by TechVault IT with recovery key)
+Image acquired: January 5, 2026
+
+Findings:
+
+  a) Browser History: Cleared on December 28, 2025 at 4:47 PM.
+     Google Chrome history database showed 0 entries after this date.
+     However, Chrome Favicons database (not cleared) shows visits to:
+     - gitlab.techvault.internal (multiple pages, Nov-Dec 2025)
+     - nexgendata.com/careers (November 10, 2025 — BEFORE resignation)
+     - protonmail.com (December 5-28, 2025, multiple visits)
+
+  b) Recycle Bin: Emptied on December 28, 2025 at 4:52 PM.
+     Shadow copy analysis recovered remnants of deleted files:
+     - Partial fragments of VaultLock source code files
+     - A folder named "personal_backup" containing truncated .zip files
+     - A draft email to "hiring@nexgendata.com" dated November 8, 2025
+
+  c) Windows Search Index: Not cleared. Contains indexed metadata for files
+     that no longer exist on disk, including:
+     - C:\Users\kzhang\Documents\vault_export\kda7_spec_v4.2.pdf
+     - C:\Users\kzhang\Documents\vault_export\architecture_overview.docx
+     - C:\Users\kzhang\Documents\vault_export\benchmark_results_2025.xlsx
+
+  d) USB Connection History: Registry keys confirm Samsung T7 Shield was connected
+     only once (December 2, 2025), consistent with event log findings.
+
+  e) Secure Delete Tool: Installation artifacts for "Eraser v6.2.0" found in
+     the Windows Installer cache. Installation date: December 27, 2025.
+     This tool provides DoD-standard secure file deletion.
+
+5. TIMELINE RECONSTRUCTION
+
+Based on all evidence, the following timeline emerges:
+
+  Nov 8, 2025  — Zhang applies to NexGen (draft email recovered from laptop)
+  Nov 10, 2025 — Zhang visits nexgendata.com/careers
+  Nov 15, 2025 — Zhang submits resignation to TechVault
+  Nov 18, 2025 — Zhang clones entire VaultLock codebase (3,847 files) after hours
+  Nov 22, 2025 — Zhang accesses customer deployment documentation
+  Dec 2, 2025  — Zhang copies data to personal USB drive (Samsung T7, 2TB)
+  Dec 5-28     — Zhang accesses ProtonMail (encrypted email, contents unknown)
+  Dec 10, 2025 — Zhang forwards 23 emails with attachments to personal Gmail
+  Dec 15, 2025 — Zhang accesses KDA-7 specification (hadn't accessed in 6+ months)
+  Dec 27, 2025 — Zhang installs Eraser secure deletion tool
+  Dec 28, 2025 — Zhang clears browser history and empties Recycle Bin
+  Dec 30, 2025 — Zhang certifies at exit interview that no data was retained
+  Dec 31, 2025 — Zhang's last day at TechVault
+  Jan 15, 2026 — Zhang starts at NexGen as VP Engineering
+  Feb 20, 2026 — NexGen announces "Fortress" platform
+
+CONCLUSIONS
+
+1. Zhang engaged in systematic data exfiltration over a 6-week period.
+2. The exfiltrated data includes the complete VaultLock source code, the KDA-7 specification, customer deployment data, and technical documentation.
+3. The timing of Zhang's job application (pre-resignation) and the exfiltration activities strongly suggest premeditated theft.
+4. Zhang's use of a secure deletion tool and clearing of browser history/Recycle Bin indicates awareness that his activities were improper and an attempt to conceal evidence.
+5. Zhang's exit interview certification was false — data had been copied to a personal USB device and forwarded to a personal email account.
+
+I declare under penalty of perjury that the foregoing is true and correct.
+
+/s/ Dr. Alicia M. Reeves
+Date: February 18, 2026

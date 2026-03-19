@@ -1,0 +1,148 @@
+COMMERCIAL REAL ESTATE PURCHASE AND SALE AGREEMENT
+
+This Agreement is entered into as of September 15, 2025, by and between:
+
+SELLER: Greenfield Industrial Partners, LLC
+        a Georgia limited liability company
+        Address: 800 Peachtree Street NE, Suite 2400, Atlanta, GA 30308
+
+BUYER:  Riverside Development Group, Inc.
+        a Georgia corporation
+        Address: 200 Galleria Parkway, Suite 1500, Atlanta, GA 30339
+
+═══════════════════════════════════════════════════════════════
+
+RECITALS
+
+WHEREAS, Seller is the owner of that certain real property located at 1500 Industrial
+Boulevard, Macon, Georgia 31201, consisting of approximately 12.4 acres of land improved
+with a 185,000 square foot industrial facility (the "Property"); and
+
+WHEREAS, Buyer desires to purchase the Property for redevelopment as a mixed-use
+commercial and residential complex known as "Riverside Commons"; and
+
+WHEREAS, the parties desire to set forth the terms and conditions of such sale;
+
+NOW, THEREFORE, for good and valuable consideration, the parties agree as follows:
+
+ARTICLE 1 — PURCHASE PRICE AND PAYMENT
+
+1.1 Purchase Price: $4,200,000 (Four Million Two Hundred Thousand Dollars)
+
+1.2 Earnest Money: $210,000 deposited with First National Title Company within 5 business
+    days of execution. Non-refundable after expiration of the Due Diligence Period except
+    in the event of Seller's default.
+
+1.3 Balance: $3,990,000 due at Closing by wire transfer of immediately available funds.
+
+ARTICLE 2 — DUE DILIGENCE
+
+2.1 Due Diligence Period: Buyer shall have sixty (60) days from the Effective Date
+    (the "Due Diligence Period") to conduct inspections, environmental assessments,
+    surveys, and other investigations of the Property.
+
+2.2 Environmental Assessment: Buyer shall conduct, at Buyer's expense:
+    (a) Phase I Environmental Site Assessment in accordance with ASTM E1527-21
+    (b) If warranted by Phase I findings, Phase II Environmental Site Assessment
+    (c) Any additional testing Buyer deems necessary
+
+2.3 Seller's Representations Regarding Environmental Condition:
+    Seller represents and warrants to Buyer that, to Seller's actual knowledge:
+    (a) No Hazardous Substances have been released, stored, or disposed of on the Property
+        in violation of applicable Environmental Laws;
+    (b) The Property is not listed on the National Priorities List (NPL), the CERCLIS
+        database, or any state equivalent;
+    (c) Seller has not received any notice from any governmental authority regarding
+        environmental violations or required remediation;
+    (d) All underground storage tanks on the Property have been properly removed or
+        closed in accordance with applicable regulations;
+    (e) Seller has provided Buyer with all environmental reports in Seller's possession.
+
+2.4 Termination Right: If Buyer is not satisfied with the results of due diligence,
+    Buyer may terminate this Agreement by written notice to Seller before expiration
+    of the Due Diligence Period, in which case the Earnest Money shall be returned
+    to Buyer in full.
+
+ARTICLE 3 — SELLER'S DISCLOSURES
+
+3.1 Seller has disclosed the following regarding the Property's history:
+    (a) The Property was operated as a textile manufacturing facility from 1968 to 2003
+        by Georgia Textile Mills, Inc.
+    (b) From 2003 to 2018, the Property was used as a warehouse and distribution center
+        by Southeast Logistics, LLC.
+    (c) The Property has been vacant since 2018.
+    (d) Seller acquired the Property via foreclosure in 2020.
+    (e) Two underground storage tanks (USTs) were removed in 2004 by Southeast Logistics.
+        Seller has provided the closure report from Georgia EPD.
+
+3.2 Seller has provided Buyer with the following documents:
+    (a) Phase I ESA dated March 2020 (prepared for Seller's acquisition)
+    (b) UST closure report dated September 2004
+    (c) Georgia EPD correspondence regarding UST removal (2004)
+    (d) Property survey dated January 2020
+    (e) Title commitment from First National Title Company
+
+ARTICLE 4 — CLOSING
+
+4.1 Closing Date: Within thirty (30) days after expiration of the Due Diligence Period,
+    or November 14, 2025.
+
+4.2 Closing Documents: [Standard provisions omitted for brevity]
+
+ARTICLE 5 — REPRESENTATIONS AND WARRANTIES
+
+5.1 Seller represents and warrants:
+    (a) Seller has full authority to execute this Agreement and convey the Property.
+    (b) To Seller's actual knowledge, the Property is in compliance with all applicable
+        laws, ordinances, and regulations.
+    (c) There are no pending or threatened lawsuits, condemnation proceedings, or
+        governmental actions affecting the Property.
+    (d) The representations in Section 2.3 are true and correct as of the date hereof
+        and shall be true and correct at Closing.
+
+5.2 "Seller's actual knowledge" means the current, actual (not imputed or constructive)
+    knowledge of Marcus Webb, Managing Member of Greenfield Industrial Partners, LLC,
+    without independent investigation or inquiry.
+
+ARTICLE 6 — REMEDIES
+
+6.1 If Seller defaults, Buyer may: (a) seek specific performance, or (b) terminate
+    this Agreement and recover the Earnest Money plus actual damages.
+
+6.2 If Buyer defaults after the Due Diligence Period, Seller's sole remedy is retention
+    of the Earnest Money as liquidated damages.
+
+6.3 Survival: Seller's representations and warranties shall survive Closing for a
+    period of two (2) years.
+
+ARTICLE 7 — INDEMNIFICATION
+
+7.1 Seller shall indemnify, defend, and hold harmless Buyer from and against any and
+    all claims, losses, damages, liabilities, and expenses arising from:
+    (a) Any breach of Seller's representations or warranties;
+    (b) Any environmental contamination existing on the Property prior to Closing;
+    (c) Any third-party claims relating to Seller's ownership or operation of the Property.
+
+7.2 The indemnification obligations in Section 7.1 shall survive Closing for the same
+    period as the underlying representations and warranties.
+
+ARTICLE 8 — MISCELLANEOUS
+
+8.1 Governing Law: State of Georgia
+8.2 Dispute Resolution: Binding arbitration per the AAA Commercial Rules
+8.3 Entire Agreement: This Agreement constitutes the entire agreement between the parties.
+8.4 Amendment: No amendment except in writing signed by both parties.
+
+IN WITNESS WHEREOF:
+
+GREENFIELD INDUSTRIAL PARTNERS, LLC
+
+By: /s/ Marcus Webb
+    Marcus Webb, Managing Member
+    Date: September 15, 2025
+
+RIVERSIDE DEVELOPMENT GROUP, INC.
+
+By: /s/ David Chen
+    David Chen, President
+    Date: September 15, 2025
