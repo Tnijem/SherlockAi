@@ -79,15 +79,21 @@ hdr "Step 2: Homebrew"
 if command -v brew &>/dev/null; then
   ok "Homebrew already installed ($(brew --version | head -1))"
 else
-  step "Installing Homebrew..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" >> "${LOG}" 2>&1
+  step "Installing Homebrew (you may be prompted for your password)..."
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 2>&1 | tee -a "${LOG}" || true
 
   # Add brew to PATH for Apple Silicon
-  if [[ "${ARCH}" == "arm64" ]]; then
-    echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "${HOME}/.zprofile"
+  if [[ "${ARCH}" == "arm64" ]] && [[ -f /opt/homebrew/bin/brew ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
+    grep -q 'brew shellenv' "${HOME}/.zprofile" 2>/dev/null || \
+      echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "${HOME}/.zprofile"
   fi
-  ok "Homebrew installed"
+
+  if command -v brew &>/dev/null; then
+    ok "Homebrew installed"
+  else
+    fail "Homebrew install failed — check ${LOG}"
+  fi
 fi
 
 # Silence brew hints
