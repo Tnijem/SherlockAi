@@ -96,6 +96,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('nav-config').classList.remove('hidden');
   }
 
+  initTheme();
   loadMatters();
   loadCases();
   loadHistory();
@@ -109,6 +110,31 @@ window.addEventListener('DOMContentLoaded', () => {
   // Check research mode availability
   checkResearchStatus();
 });
+
+// ── Theme ──────────────────────────────────────────────────────────────────────
+
+const THEMES = ['formal', 'tron'];
+const THEME_LABELS = { formal: '◈ Formal', tron: '⬡ Tron' };
+
+function initTheme() {
+  const saved = localStorage.getItem('sherlock_theme') || 'formal';
+  applyTheme(saved);
+}
+
+function applyTheme(name) {
+  document.documentElement.setAttribute('data-theme', name);
+  localStorage.setItem('sherlock_theme', name);
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.textContent = THEME_LABELS[name] || name;
+  const favicon = document.getElementById('favicon');
+  if (favicon) favicon.href = name === 'tron' ? '/static/favicon-tron.svg' : '/static/favicon-formal.svg';
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'formal';
+  const next = THEMES[(THEMES.indexOf(current) + 1) % THEMES.length];
+  applyTheme(next);
+}
 
 // ── NAS status banner ─────────────────────────────────────────────────────────
 
@@ -409,13 +435,56 @@ function renderMatters() {
     el.innerHTML = '<div class="empty-state" style="padding:24px 16px;"><p style="font-size:12px;">No tasks yet.<br>Create one to get started.</p></div>';
     return;
   }
-  el.innerHTML = state.matters.map(m => `
-    <div class="matter-item ${m.id === state.activeMatterId ? 'active' : ''}" onclick="selectMatter(${m.id})">
-      <span style="font-size:14px;">&#128220;</span>
+
+  function matterRow(m) {
+    return `<div class="matter-item ${m.id === state.activeMatterId ? 'active' : ''}" onclick="selectMatter(${m.id})">
+      <span style="font-size:13px;">&#128220;</span>
       <span class="matter-name">${escHtml(m.name)}</span>
-      <span class="billable-badge" title="Billable hours (click to edit)" onclick="event.stopPropagation();editBillable(${m.id})">${(m.billable_time || 0).toFixed(1)}h</span>
+      <span class="billable-badge" title="Billable hours" onclick="event.stopPropagation();editBillable(${m.id})">${(m.billable_time || 0).toFixed(1)}h</span>
+    </div>`;
+  }
+
+  // Group matters by linked case
+  const grouped = {};
+  const ungrouped = [];
+  for (const m of state.matters) {
+    if (m.case_id) {
+      if (!grouped[m.case_id]) {
+        grouped[m.case_id] = { case_name: m.case_name || `Case #${m.case_id}`, matters: [] };
+      }
+      grouped[m.case_id].matters.push(m);
+    } else {
+      ungrouped.push(m);
+    }
+  }
+
+  let html = '';
+  for (const [caseId, g] of Object.entries(grouped)) {
+    html += `<div class="case-group-header" onclick="goToCase(${caseId})" title="Open case: ${escHtml(g.case_name)}" style="cursor:pointer;">
+      <span style="font-size:11px;opacity:0.6;">&#128193;</span>
+      <span class="case-group-label">${escHtml(g.case_name)}</span>
+      <span class="case-group-count">${g.matters.length}</span>
     </div>
-  `).join('');
+    <div class="case-group-matters">${g.matters.map(matterRow).join('')}</div>`;
+  }
+  if (ungrouped.length) {
+    if (Object.keys(grouped).length) html += `<div class="ungrouped-header">Other Tasks</div>`;
+    html += ungrouped.map(matterRow).join('');
+  }
+  el.innerHTML = html;
+}
+
+function goToCase(caseId) {
+  showView('cases');
+  // Wait for renderCases() to finish, then scroll to and highlight the card
+  setTimeout(() => {
+    const card = document.getElementById(`case-${caseId}`);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('case-card-highlight');
+      setTimeout(() => card.classList.remove('case-card-highlight'), 1800);
+    }
+  }, 80);
 }
 
 async function editBillable(matterId) {
@@ -524,18 +593,31 @@ function selectMatter(id) {
   renderMatters();
 
   document.getElementById('chatMatterTitle').textContent = matter?.name || 'All Indexed Files';
-
-  // Show edit + export buttons only when a task is active
   document.getElementById('editTaskBtn').classList.toggle('hidden', !matter);
   document.getElementById('exportBtn').classList.toggle('hidden', !matter);
 
-  // Show "This Case" scope button only if matter is linked to a case
+  // Case context bar
+  const ctxBar = document.getElementById('caseCtxBar');
   const caseScopeBtn = document.getElementById('scopeCaseBtn');
+
   if (matter?.case_id) {
+    // Populate context bar
+    document.getElementById('caseCtxName').textContent = matter.case_name || `Case #${matter.case_id}`;
+    const metaParts = [];
+    if (matter.case_number) metaParts.push(matter.case_number);
+    if (matter.case_type)   metaParts.push(matter.case_type);
+    if (matter.client_name) metaParts.push(`Client: ${matter.client_name}`);
+    if (matter.opposing_party) metaParts.push(`vs. ${matter.opposing_party}`);
+    document.getElementById('caseCtxMeta').textContent = metaParts.join('  ·  ');
+    ctxBar.classList.remove('hidden');
+
+    // Old scope toggle — keep in sync
     caseScopeBtn.classList.remove('hidden');
-    const linkedCase = state.cases.find(c => c.id === matter.case_id);
-    caseScopeBtn.title = linkedCase ? `Case: ${linkedCase.case_name}` : 'This Case';
+
+    // Auto-scope to this case when entering a case-linked matter
+    setScope('case');
   } else {
+    ctxBar.classList.add('hidden');
     caseScopeBtn.classList.add('hidden');
     if (state.scope === 'case') setScope('all');
   }
@@ -562,13 +644,7 @@ function renderMessage(msg) {
   const sourcesHtml = msg.sources?.length ? `
     <div class="sources-list">
       <div class="sources-title">Sources</div>
-      ${msg.sources.map((s, i) => `
-        <div class="source-item ${s.web ? 'source-web source-clickable' : (s.path ? 'source-clickable' : '')}"
-             ${s.web ? `onclick="window.open(${JSON.stringify(s.path)}, '_blank')" title="Open web source"` : (s.path ? `onclick="openPreview(${JSON.stringify(s.path)}, ${JSON.stringify(s.file)})" title="Click to preview"` : '')}>
-          <strong>[${i+1}] ${s.web ? '&#127760; ' : ''}${escHtml(s.file)}</strong>${!s.web && s.path ? ' <span class="source-preview-hint">&#128196;</span>' : ''}
-          ${s.excerpt ? `<br><span class="source-excerpt">${escHtml(s.excerpt.substring(0, 120))}…</span>` : ''}
-        </div>
-      `).join('')}
+      ${msg.sources.map((s, i) => renderSourceItem(s, i)).join('')}
     </div>` : '';
 
   const actionsHtml = msg.role === 'assistant' ? `
@@ -678,6 +754,7 @@ function renderCases() {
         <span class="case-index-info">${lastIdx}${indexedCount ? ' &bull; ' + indexedCount : ''}</span>
         <div class="case-actions">
           ${c.nas_path ? `<button class="btn" style="font-size:11px;padding:3px 10px;" id="reindex-btn-${c.id}" onclick="triggerCaseReindex(${c.id})">&#8635; Index Now</button>` : ''}
+          <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="openEditCase(${c.id})">&#9998; Edit</button>
           <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="openNewMatterForCase(${c.id})">+ New Task</button>
         </div>
       </div>
@@ -730,6 +807,62 @@ async function createCase() {
   }
 }
 
+function openEditCase(caseId) {
+  const c = state.cases.find(x => x.id === caseId);
+  if (!c) return;
+  document.getElementById('ec_id').value = c.id;
+  document.getElementById('ec_case_name').value = c.case_name || '';
+  document.getElementById('ec_case_number').value = c.case_number || '';
+  document.getElementById('ec_case_type').value = c.case_type || '';
+  document.getElementById('ec_client_name').value = c.client_name || '';
+  document.getElementById('ec_opposing_party').value = c.opposing_party || '';
+  document.getElementById('ec_jurisdiction').value = c.jurisdiction || '';
+  document.getElementById('ec_assigned_to').value = c.assigned_to || '';
+  document.getElementById('ec_date_opened').value = c.date_opened || '';
+  document.getElementById('ec_nas_path').value = c.nas_path || '';
+  document.getElementById('ec_description').value = c.description || '';
+  document.getElementById('ec_status').value = c.status || 'active';
+  document.getElementById('editCaseError').classList.add('hidden');
+  document.getElementById('editCaseModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('ec_case_name').focus(), 50);
+}
+
+async function saveEditCase() {
+  const caseId = parseInt(document.getElementById('ec_id').value);
+  const case_name = document.getElementById('ec_case_name').value.trim();
+  if (!case_name) {
+    const e = document.getElementById('editCaseError');
+    e.textContent = 'Case name is required.';
+    e.classList.remove('hidden');
+    return;
+  }
+  const body = {
+    case_name,
+    case_number:    document.getElementById('ec_case_number').value.trim() || null,
+    case_type:      document.getElementById('ec_case_type').value || null,
+    client_name:    document.getElementById('ec_client_name').value.trim() || null,
+    opposing_party: document.getElementById('ec_opposing_party').value.trim() || null,
+    jurisdiction:   document.getElementById('ec_jurisdiction').value.trim() || null,
+    assigned_to:    document.getElementById('ec_assigned_to').value.trim() || null,
+    date_opened:    document.getElementById('ec_date_opened').value.trim() || null,
+    nas_path:       document.getElementById('ec_nas_path').value.trim() || null,
+    description:    document.getElementById('ec_description').value.trim() || null,
+    status:         document.getElementById('ec_status').value || 'active',
+  };
+  try {
+    const updated = await api('PATCH', `/api/cases/${caseId}`, body);
+    const idx = state.cases.findIndex(x => x.id === caseId);
+    if (idx !== -1) state.cases[idx] = { ...state.cases[idx], ...updated };
+    closeModal('editCaseModal');
+    toast(`Case "${updated.case_name}" updated.`, 'success');
+    renderCases();
+    loadMatters(); // refresh sidebar in case name changed
+  } catch (e) {
+    document.getElementById('editCaseError').textContent = e.message;
+    document.getElementById('editCaseError').classList.remove('hidden');
+  }
+}
+
 function openNewMatterForCase(caseId) {
   openNewMatterModal();
   document.getElementById('newMatterCaseId').value = String(caseId);
@@ -771,7 +904,8 @@ function pollCaseIndex(jobId, caseId, btn) {
 
 function setScope(scope) {
   state.scope = scope;
-  document.querySelectorAll('.scope-btn').forEach(b => {
+  // Sync both the header scope-btn strip and the context bar buttons
+  document.querySelectorAll('.scope-btn, .ctx-scope-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.scope === scope);
   });
 }
@@ -906,12 +1040,7 @@ async function sendMessage(overrideText = null) {
       const srcDiv = document.createElement('div');
       srcDiv.className = 'sources-list';
       srcDiv.innerHTML = `<div class="sources-title">Sources</div>` +
-        sources.map((s, i) => `
-          <div class="source-item ${s.web ? 'source-web source-clickable' : (s.path ? 'source-clickable' : '')}"
-               ${s.web ? `onclick="window.open(${JSON.stringify(s.path)}, '_blank')" title="Open web source"` : (s.path ? `onclick="openPreview(${JSON.stringify(s.path)}, ${JSON.stringify(s.file)})" title="Click to preview"` : '')}>
-            <strong>[${i+1}] ${s.web ? '&#127760; ' : ''}${escHtml(s.file)}</strong>${!s.web && s.path ? ' <span class="source-preview-hint">&#128196;</span>' : ''}
-            ${s.excerpt ? `<br><span class="source-excerpt">${escHtml(s.excerpt.substring(0, 120))}…</span>` : ''}
-          </div>`).join('');
+        sources.map((s, i) => renderSourceItem(s, i)).join('');
       aiDiv.appendChild(srcDiv);
     }
 
@@ -1834,6 +1963,55 @@ function toggleHistorySection() {
   document.getElementById('historyToggle').textContent = _historyExpanded ? '▲' : '▼';
 }
 
+/* ── Sidebar resizer ──────────────────────────────────────────────────────────*/
+(function initSidebarResizer() {
+  const STORAGE_KEY = 'sherlock_sidebar_tasks_pct';
+  const sidebar     = document.getElementById('sidebar');
+  const resizer     = document.getElementById('sidebarResizer');
+  if (!sidebar || !resizer) return;
+
+  function applyPct(pct) {
+    pct = Math.min(85, Math.max(10, pct));
+    sidebar.style.setProperty('--sidebar-tasks-h', pct + '%');
+  }
+
+  // Restore persisted split
+  const saved = parseFloat(localStorage.getItem(STORAGE_KEY));
+  if (!isNaN(saved)) applyPct(saved);
+
+  resizer.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    resizer.classList.add('dragging');
+
+    const startY     = e.clientY;
+    const footer     = sidebar.querySelector('.sidebar-footer');
+    const footerH    = footer ? footer.offsetHeight : 0;
+    const matterList = document.getElementById('matterList');
+    const startPx    = matterList.offsetHeight;
+
+    function usableH() {
+      return sidebar.getBoundingClientRect().height - resizer.offsetHeight - footerH;
+    }
+
+    function onMouseMove(ev) {
+      const delta  = ev.clientY - startY;
+      const newPct = ((startPx + delta) / usableH()) * 100;
+      applyPct(newPct);
+    }
+
+    function onMouseUp() {
+      resizer.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup',   onMouseUp);
+      const pct = (matterList.offsetHeight / usableH()) * 100;
+      localStorage.setItem(STORAGE_KEY, pct.toFixed(1));
+    }
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup',   onMouseUp);
+  });
+})();
+
 function jumpToHistory(matterId, query) {
   selectMatter(matterId);
   document.getElementById('chatInput').value = query;
@@ -1867,6 +2045,76 @@ function escHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function renderSourceItem(s, i) {
+  const isWeb = !!s.web;
+  const hasPath = !!s.path && !isWeb;
+  const clickable = isWeb || hasPath;
+  const cls = `source-item${isWeb ? ' source-web' : ''}${clickable ? ' source-clickable' : ''}`;
+
+  // Use data attributes to avoid quote-escaping issues in onclick
+  const dataAttrs = hasPath
+    ? `data-src-path="${escHtml(s.path || '')}" data-src-file="${escHtml(s.file || '')}"`
+    : isWeb
+    ? `data-src-url="${escHtml(s.path || '')}"`
+    : '';
+
+  const rowHandler = isWeb
+    ? `onclick="window.open(this.dataset.srcUrl,'_blank')"`
+    : hasPath
+    ? `onclick="openInOS(this.dataset.srcPath)"`
+    : '';
+
+  const icon = hasPath ? ' <span class="source-link-icon">&#128279;</span>' : '';
+  const actions = hasPath ? `
+    <span class="source-actions">
+      <button onclick="event.stopPropagation(); openInOS(this.closest('[data-src-path]').dataset.srcPath)" title="Open in default app">Open</button>
+      <button onclick="event.stopPropagation(); downloadSource(this.closest('[data-src-path]').dataset.srcPath, this.closest('[data-src-path]').dataset.srcFile)" title="Download">&#8595;</button>
+    </span>` : '';
+
+  const excerpt = s.excerpt ? `<br><span class="source-excerpt">${escHtml(s.excerpt.substring(0, 150))}…</span>` : '';
+  const score = s.score && s.score < 1.0 ? ` <span style="opacity:0.4;font-size:10px;">${Math.round(s.score * 100)}%</span>` : '';
+
+  return `<div class="${cls}" ${dataAttrs} ${rowHandler}>
+    <strong>[${i + 1}] ${isWeb ? '&#127760; ' : ''}${escHtml(s.file)}</strong>${score}${icon}${actions}${excerpt}
+  </div>`;
+}
+
+async function openInOS(filePath) {
+  try {
+    const resp = await fetch(`/api/open?path=${encodeURIComponent(filePath)}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${state.token}`,
+        'X-CSRF-Token': getCsrfToken(),
+      },
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      toast(err.detail || 'Could not open file', 'error');
+    }
+  } catch (e) {
+    toast('Could not open file: ' + e.message, 'error');
+  }
+}
+
+async function downloadSource(filePath, filename) {
+  try {
+    const resp = await fetch(`/api/preview?path=${encodeURIComponent(filePath)}`, {
+      headers: { 'Authorization': `Bearer ${state.token}` }
+    });
+    if (!resp.ok) { toast('Download failed', 'error'); return; }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'document';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    toast('Download failed: ' + e.message, 'error');
+  }
+}
+
 function formatBytes(n) {
   if (!n) return '?';
   if (n < 1024) return `${n} B`;
@@ -1886,3 +2134,40 @@ function fileIcon(type) {
     jpg:'🖼', jpeg:'🖼', png:'🖼', tiff:'🖼', mp3:'🎵', wav:'🎵', m4a:'🎵', eml:'📧' };
   return icons[type] || '📁';
 }
+
+// ── Tron cursor glow ───────────────────────────────────────────────────────────
+
+(function initTronCursor() {
+  const glow = document.createElement('div');
+  glow.id = 'tron-cursor-glow';
+  document.body.appendChild(glow);
+
+  let active = false;
+
+  document.addEventListener('mousemove', e => {
+    if (document.documentElement.getAttribute('data-theme') !== 'tron') {
+      glow.style.opacity = '0';
+      return;
+    }
+    glow.style.left = e.clientX + 'px';
+    glow.style.top  = e.clientY + 'px';
+    if (active) glow.style.opacity = '1';
+  });
+
+  document.addEventListener('mouseover', e => {
+    if (document.documentElement.getAttribute('data-theme') !== 'tron') return;
+    const el = e.target.closest('button, a, [onclick], .matter-item, .source-item, .case-group-header, select, input, textarea, label');
+    if (el) {
+      active = true;
+      glow.style.opacity = '1';
+    }
+  });
+
+  document.addEventListener('mouseout', e => {
+    const el = e.target.closest('button, a, [onclick], .matter-item, .source-item, .case-group-header, select, input, textarea, label');
+    if (el) {
+      active = false;
+      glow.style.opacity = '0';
+    }
+  });
+})();

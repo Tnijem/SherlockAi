@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Black background -->
+  <rect width="64" height="64" rx="4" fill="#000408"/>
+  <!-- Tron/Daft Punk style helmet -->
+  <!-- Visor glow backdrop -->
+  <rect x="14" y="26" width="36" height="14" rx="2" fill="rgba(0,229,255,0.08)"/>
+  <!-- Helmet outer shell -->
+  <path d="M12 35 Q12 18 32 16 Q52 18 52 35 L52 44 Q52 50 46 52 L18 52 Q12 50 12 44 Z" fill="#020c18" stroke="#00e5ff" stroke-width="1.2"/>
+  <!-- Visor slot -->
+  <rect x="15" y="27" width="34" height="12" rx="2" fill="#000408" stroke="#00e5ff" stroke-width="0.8"/>
+  <!-- Visor inner glow -->
+  <rect x="16" y="28" width="32" height="10" rx="1.5" fill="rgba(0,229,255,0.15)"/>
+  <!-- Visor cyan reflection lines -->
+  <line x1="18" y1="31" x2="46" y2="31" stroke="rgba(0,229,255,0.5)" stroke-width="0.8"/>
+  <line x1="18" y1="34" x2="46" y2="34" stroke="rgba(0,229,255,0.3)" stroke-width="0.5"/>
+  <!-- Helmet top detail line -->
+  <line x1="32" y1="16" x2="32" y2="27" stroke="#00e5ff" stroke-width="0.8" opacity="0.6"/>
+  <!-- Chin bar -->
+  <rect x="18" y="48" width="28" height="5" rx="2" fill="#020c18" stroke="#00e5ff" stroke-width="0.8"/>
+  <!-- Side ear pieces -->
+  <rect x="9" y="32" width="5" height="12" rx="2" fill="#020c18" stroke="#00e5ff" stroke-width="0.8"/>
+  <rect x="50" y="32" width="5" height="12" rx="2" fill="#020c18" stroke="#00e5ff" stroke-width="0.8"/>
+  <!-- Visor edge glow -->
+  <rect x="15" y="27" width="34" height="12" rx="2" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity="0.8"/>
+  <!-- Small red accent light top center -->
+  <circle cx="32" cy="19" r="1.5" fill="#ff4400" opacity="0.9"/>
+  <!-- Circuit lines on helmet -->
+  <path d="M20 43 H26 V46 H38 V43 H44" fill="none" stroke="#00e5ff" stroke-width="0.6" opacity="0.5"/>
+</svg>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Dark background -->
+  <rect width="64" height="64" rx="8" fill="#0f1117"/>
+  <!-- Sherlock Holmes silhouette: deerstalker hat + pipe profile -->
+  <!-- Hat brim -->
+  <ellipse cx="32" cy="26" rx="16" ry="3.5" fill="#c9a84c"/>
+  <!-- Deerstalker crown -->
+  <path d="M18 26 Q16 16 24 13 Q28 11 32 12 Q36 11 40 13 Q48 16 46 26 Z" fill="#c9a84c"/>
+  <!-- Front peak -->
+  <path d="M18 26 Q14 24 13 27 Q14 30 20 28 Z" fill="#c9a84c"/>
+  <!-- Back peak -->
+  <path d="M46 26 Q50 24 51 27 Q50 30 44 28 Z" fill="#c9a84c"/>
+  <!-- Ear flap ties at top -->
+  <circle cx="22" cy="12" r="2" fill="#c9a84c"/>
+  <circle cx="42" cy="12" r="2" fill="#c9a84c"/>
+  <!-- Face/head -->
+  <ellipse cx="32" cy="33" rx="9" ry="10" fill="#c9a84c"/>
+  <!-- Neck -->
+  <rect x="28" y="42" width="8" height="5" rx="1" fill="#c9a84c"/>
+  <!-- Coat collar -->
+  <path d="M20 47 Q28 44 32 47 Q36 44 44 47 Q40 55 32 56 Q24 55 20 47Z" fill="#c9a84c"/>
+  <!-- Pipe stem (horizontal, pointing right) -->
+  <rect x="38" y="36" width="12" height="2.5" rx="1.2" fill="#c9a84c"/>
+  <!-- Pipe bowl -->
+  <rect x="49" y="32" width="5" height="7" rx="2" fill="#c9a84c"/>
+  <!-- Magnifying glass (small, lower left) -->
+  <circle cx="16" cy="48" r="5" fill="none" stroke="#c9a84c" stroke-width="2"/>
+  <line x1="20" y1="52" x2="23" y2="55" stroke="#c9a84c" stroke-width="2" stroke-linecap="round"/>
+</svg>

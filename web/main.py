@@ -700,7 +700,23 @@ def list_matters(
         .order_by(Matter.created_at.desc())
         .all()
     )
-    return [{"id": m.id, "name": m.name, "case_id": m.case_id, "billable_time": m.billable_time or 0.0, "created_at": m.created_at.isoformat()} for m in matters]
+    return [
+        {
+            "id": m.id,
+            "name": m.name,
+            "case_id": m.case_id,
+            "billable_time": m.billable_time or 0.0,
+            "created_at": m.created_at.isoformat(),
+            # Inline case info so sidebar/context bar doesn't need a separate lookup
+            "case_name":       m.case.case_name       if m.case else None,
+            "case_number":     m.case.case_number     if m.case else None,
+            "case_type":       m.case.case_type       if m.case else None,
+            "client_name":     m.case.client_name     if m.case else None,
+            "opposing_party":  m.case.opposing_party  if m.case else None,
+            "case_status":     m.case.status          if m.case else None,
+        }
+        for m in matters
+    ]
 
 
 @app.post("/api/matters", status_code=201)
@@ -780,10 +796,31 @@ async def chat(
     if not matter:
         raise HTTPException(status_code=404, detail="Matter not found")
 
-    # If scope is "case" and matter has a linked case, resolve collection
+    # ── Case context: auto-scope to case collection when matter is linked to a case ──
+    case_context: dict | None = None
     resolved_scope = body.scope
-    if body.scope == "case" and matter.case_id:
-        resolved_scope = case_collection(matter.case_id)  # direct collection name
+
+    if matter.case_id:
+        linked_case = db.query(Case).filter(Case.id == matter.case_id).first()
+        if linked_case:
+            case_context = {
+                "case_name":      linked_case.case_name,
+                "case_number":    linked_case.case_number,
+                "case_type":      linked_case.case_type,
+                "client_name":    linked_case.client_name,
+                "opposing_party": linked_case.opposing_party,
+                "jurisdiction":   linked_case.jurisdiction,
+                "assigned_to":    linked_case.assigned_to,
+                "status":         linked_case.status,
+                "description":    linked_case.description,
+                "matter_name":    matter.name,
+            }
+            # Auto-scope to this case's collection unless the user explicitly chose "all"
+            if body.scope in ("all", "case", "both"):
+                resolved_scope = case_collection(matter.case_id)
+    elif body.scope == "case":
+        # Matter has no linked case but scope was "case" — fall back to "both"
+        resolved_scope = "both"
 
     # Fetch recent conversation history (last 6 messages = 3 user+assistant pairs)
     recent_msgs = (
@@ -820,6 +857,7 @@ async def chat(
             verbosity_role=body.verbosity_role,
             research_mode=body.research_mode,
             history=chat_history,
+            case_context=case_context,
         ):
             if len(chunk) == 3:
                 # Final stats tuple: (token, sources, stats_dict)
@@ -1812,6 +1850,92 @@ _PREVIEW_MIME = {
 }
 _NATIVE_PREVIEW = {".pdf", ".txt", ".md", ".csv",
                    ".jpg", ".jpeg", ".png", ".gif", ".tiff", ".tif", ".bmp"}
+
+
+@app.post("/api/open")
+def open_file_in_os(
+    path: str = Query(...),
+    current_user: User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Open a file in the user's default OS application (macOS: open, Linux: xdg-open)."""
+    import subprocess, sys
+    from models import IndexedFile, Upload
+    from config import UPLOADS_DIR, OUTPUTS_DIR, NAS_PATHS
+
+    if not path or path.strip() == "":
+        raise HTTPException(status_code=400, detail="No file path provided")
+
+    fp = Path(path).expanduser().resolve()
+
+    # Guard against symlink traversal
+    try:
+        real = fp.resolve()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid path")
+
+    # Build set of trusted root directories
+    _sherlock_base = Path(__file__).resolve().parent.parent  # ~/Sherlock
+    trusted_roots = [
+        Path(UPLOADS_DIR).resolve(),
+        Path(OUTPUTS_DIR).resolve(),
+        _sherlock_base / "demo",
+        _sherlock_base / "SampleData",
+        _sherlock_base,
+    ]
+    for np in (NAS_PATHS or []):
+        try:
+            trusted_roots.append(Path(np).resolve())
+        except Exception:
+            pass
+
+    in_trusted = any(
+        str(real).startswith(str(root)) for root in trusted_roots
+    )
+
+    # Also accept if file is recorded in IndexedFile or Upload tables
+    in_db = (
+        db.query(IndexedFile).filter(
+            (IndexedFile.file_path == str(fp)) | (IndexedFile.file_path == path)
+        ).first() is not None
+        or db.query(Upload).filter(
+            (Upload.stored_path == str(fp)) | (Upload.stored_path == path),
+            Upload.user_id == current_user.id,
+        ).first() is not None
+    )
+
+    if not in_trusted and not in_db:
+        # Admins can open any indexed file
+        if current_user.role == "admin":
+            in_db = db.query(IndexedFile).filter(
+                (IndexedFile.file_path == str(fp)) | (IndexedFile.file_path == path)
+            ).first() is not None
+            if not in_db:
+                audit("file_access_denied", user_id=current_user.id,
+                      username=current_user.username, file_path=str(fp))
+                raise HTTPException(status_code=403, detail="File not accessible")
+        else:
+            audit("file_access_denied", user_id=current_user.id,
+                  username=current_user.username, file_path=str(fp))
+            raise HTTPException(status_code=403, detail="File not accessible")
+
+    if not fp.exists():
+        raise HTTPException(status_code=404, detail=f"File not found on disk: {fp.name}")
+
+    audit("file_open_os", user_id=current_user.id, username=current_user.username,
+          file_path=str(fp))
+
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", str(fp)])
+        elif sys.platform.startswith("linux"):
+            subprocess.Popen(["xdg-open", str(fp)])
+        else:
+            subprocess.Popen(["start", str(fp)], shell=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not open file: {e}")
+
+    return {"ok": True, "path": str(fp)}
 
 
 @app.get("/api/preview")

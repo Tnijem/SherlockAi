@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="formal">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sherlock</title>
+  <link rel="icon" type="image/svg+xml" id="favicon" href="/static/favicon-formal.svg">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -29,6 +30,7 @@
       <button onclick="showView('config')" id="nav-config" class="hidden">Config</button>
     </nav>
     <div class="header-right">
+      <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Switch theme"></button>
       <span class="user-pill" id="userPill"></span>
       <button class="btn-icon" title="Sign out" onclick="logout()">&#x2715;</button>
     </div>
@@ -51,6 +53,8 @@
         <button class="btn-icon" title="New task" onclick="openNewMatterModal()">&#65291;</button>
       </div>
       <div class="sidebar-list" id="matterList"></div>
+
+      <div class="sidebar-resizer" id="sidebarResizer" title="Drag to resize"></div>
 
       <div class="sidebar-section" id="historySection">
 
@@ -93,6 +97,19 @@
               <button class="scope-btn active" data-scope="all" onclick="setScope('all')">All Files</button>
               <button class="scope-btn hidden" data-scope="case" id="scopeCaseBtn" onclick="setScope('case')">This Case</button>
             </div>
+          </div>
+        </div>
+
+        <!-- Case context bar — visible only when matter is linked to a case -->
+        <div class="case-ctx-bar hidden" id="caseCtxBar">
+          <span class="case-ctx-icon">&#128193;</span>
+          <div class="case-ctx-info">
+            <span class="case-ctx-name" id="caseCtxName"></span>
+            <span class="case-ctx-meta" id="caseCtxMeta"></span>
+          </div>
+          <div class="case-ctx-scope">
+            <button class="ctx-scope-btn" data-scope="case" onclick="setScope('case')" id="ctxScopeCase">This Case</button>
+            <button class="ctx-scope-btn" data-scope="all" onclick="setScope('all')" id="ctxScopeAll">All Files</button>
           </div>
         </div>
 
@@ -322,6 +339,82 @@
 </div>
 
 <!-- New Case Modal -->
+<div class="modal-overlay hidden" id="editCaseModal">
+  <div class="modal" style="max-width:560px;">
+    <h2>Edit Case</h2>
+    <input type="hidden" id="ec_id">
+    <div class="field-row">
+      <div class="field">
+        <label>Case Name <span class="req">*</span></label>
+        <input type="text" id="ec_case_name" placeholder="e.g. Smith v. Jones">
+      </div>
+      <div class="field">
+        <label>Case Number</label>
+        <input type="text" id="ec_case_number" placeholder="e.g. 2024-CV-031">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Case Type</label>
+        <select id="ec_case_type">
+          <option value="">— Select —</option>
+          <option>Criminal</option><option>Civil</option><option>Family</option>
+          <option>Corporate</option><option>Personal Injury</option>
+          <option>Real Estate</option><option>Immigration</option>
+          <option>Bankruptcy</option><option>Employment</option><option>Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <select id="ec_status">
+          <option value="active">Active</option>
+          <option value="closed">Closed</option>
+          <option value="pending">Pending</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Client Name</label>
+        <input type="text" id="ec_client_name">
+      </div>
+      <div class="field">
+        <label>Opposing Party</label>
+        <input type="text" id="ec_opposing_party">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Jurisdiction</label>
+        <input type="text" id="ec_jurisdiction" placeholder="e.g. Northern District of California">
+      </div>
+      <div class="field">
+        <label>Assigned Attorney</label>
+        <input type="text" id="ec_assigned_to">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Date Opened</label>
+        <input type="text" id="ec_date_opened" placeholder="YYYY-MM-DD">
+      </div>
+    </div>
+    <div class="field">
+      <label>NAS Path <span style="color:var(--text-muted);font-weight:normal;">(optional)</span></label>
+      <input type="text" id="ec_nas_path" placeholder="/Volumes/NAS/Cases/Smith_v_Jones">
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="ec_description" rows="2"></textarea>
+    </div>
+    <div id="editCaseError" class="error-msg hidden"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('editCaseModal')">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:8px 24px;" onclick="saveEditCase()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="newCaseModal">
   <div class="modal" style="max-width:560px;">
     <h2>New Case</h2>

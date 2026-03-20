@@ -262,11 +262,13 @@ def retrieve(
     if collection_names:
         bm25_results = _bm25_search(query, collection_names, n=n * 4)
         if bm25_results:
-            # Normalize BM25 scores to 0-1 range
-            max_bm25 = max(r["bm25_score"] for r in bm25_results) if bm25_results else 1
-            if max_bm25 > 0:
+            # Normalize BM25 scores to 0-1 range.
+            # SQLite FTS5 bm25() returns NEGATIVE values: more negative = more relevant.
+            # Normalize by dividing by the most-negative (best) score so the best = 1.0.
+            min_bm25 = min(r["bm25_score"] for r in bm25_results)  # most negative = best
+            if min_bm25 < 0:
                 for r in bm25_results:
-                    r["bm25_norm"] = r["bm25_score"] / max_bm25
+                    r["bm25_norm"] = r["bm25_score"] / min_bm25  # best → 1.0
             else:
                 for r in bm25_results:
                     r["bm25_norm"] = 0
@@ -410,8 +412,41 @@ def _build_system_prompt(
     query_type: str = "auto",
     verbosity_role: str = "attorney",
     research_mode: bool = False,
+    case_context: dict | None = None,
 ) -> str:
     parts = [_BASE_SYSTEM]
+
+    # ── Case context block (pinned at top of system prompt) ──────────────────
+    if case_context:
+        lines = ["\n\n═══ ACTIVE CASE CONTEXT ═══"]
+        lines.append(
+            "You are currently working on the following case. Unless the user explicitly "
+            "directs you to a different matter, ALL queries refer to this case. "
+            "When the user says 'this case', 'the case', 'our client', 'the plaintiff', "
+            "'the defendant', or similar — they mean this case."
+        )
+        if case_context.get("case_name"):
+            lines.append(f"Case Name: {case_context['case_name']}")
+        if case_context.get("case_number"):
+            lines.append(f"Case Number: {case_context['case_number']}")
+        if case_context.get("case_type"):
+            lines.append(f"Case Type: {case_context['case_type']}")
+        if case_context.get("client_name"):
+            lines.append(f"Our Client: {case_context['client_name']}")
+        if case_context.get("opposing_party"):
+            lines.append(f"Opposing Party: {case_context['opposing_party']}")
+        if case_context.get("jurisdiction"):
+            lines.append(f"Jurisdiction: {case_context['jurisdiction']}")
+        if case_context.get("assigned_to"):
+            lines.append(f"Assigned Attorney: {case_context['assigned_to']}")
+        if case_context.get("status"):
+            lines.append(f"Status: {case_context['status']}")
+        if case_context.get("description"):
+            lines.append(f"Notes: {case_context['description']}")
+        if case_context.get("matter_name"):
+            lines.append(f"Current Task/Matter: {case_context['matter_name']}")
+        lines.append("═══════════════════════════")
+        parts.append("\n".join(lines))
 
     if research_mode:
         parts.append(
@@ -484,6 +519,7 @@ async def stream_response(
     verbosity_role: str = "attorney",
     research_mode: bool = False,
     history: list[dict] | None = None,
+    case_context: dict | None = None,
 ) -> AsyncIterator[tuple]:
     """
     Yields (token, sources) tuples during streaming.
@@ -502,7 +538,7 @@ async def stream_response(
         web_results = search_web(query, n=5)
 
     prompt = _build_prompt(query, chunks, web_results if research_mode else None, history=history)
-    system_prompt = _build_system_prompt(query_type, verbosity_role, research_mode)
+    system_prompt = _build_system_prompt(query_type, verbosity_role, research_mode, case_context=case_context)
 
     sources = [
         {
