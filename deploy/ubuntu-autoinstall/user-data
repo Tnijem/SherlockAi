@@ -45,7 +45,7 @@ autoinstall:
     username: sherlock
     # Password: "sherlock" — CHANGE THIS after first login
     # Generate your own with: python3 -c "import crypt; print(crypt.crypt('yourpassword', crypt.METHOD_SHA512))"
-    password: "$6$rounds=4096$saltsaltsalt$BHSm8/Yw5s.7jhMk/JCxWLpGAeEqBM3iFw2U4OUEYGVLtB7s.qbHq7bfekSUdT7I.aH7Q3Ot/5w.D7SLXS5d/"
+    password: "$6$sherlock2024$aX.8zpJXvuV8YhQxlKmGk8gcfafqAg8wxqynFXtOQPcWz1oagePwrA8HlFSBa.0y49tKR9S13kvwOd52Bg7sW/"
     realname: "Sherlock Admin"
 
   # ── SSH ─────────────────────────────────────────────────────────────────────

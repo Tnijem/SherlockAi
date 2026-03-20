@@ -1,0 +1,164 @@
+HARRISON, COLE & ASSOCIATES, P.A.
+INTERNAL CASE MEMORANDUM — PRIVILEGED AND CONFIDENTIAL
+
+TO:     Jennifer Cole, Esq.
+FROM:   Marcus Webb, Paralegal
+DATE:   February 10, 2026
+RE:     Greenfield Commercial Properties, LLC v. Harborview Development Corp.
+        Contract Deadline & Contingency Tracking Memorandum
+        Matter No.: HCA-2025-0881
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BACKGROUND
+
+This memorandum identifies and tracks all contractual deadlines arising from the
+Commercial Real Estate Purchase and Sale Agreement dated October 15, 2025 (the
+"Agreement") between Greenfield Commercial Properties, LLC ("Buyer") and
+Harborview Development Corp. ("Seller") for the purchase of the Bayside Industrial
+Park property located at 8400 Harbor Blvd., Miami, FL 33132 (the "Property").
+
+Purchase Price: $4,750,000
+Earnest Money Deposit: $237,500 (held in escrow by South Florida Title Co.)
+
+The Agreement is currently in dispute following Seller's failure to disclose the
+Phase II environmental contamination report. See attached Demand Letter dated
+January 22, 2026.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PART I — CONTRACTUAL DEADLINES (from Purchase and Sale Agreement)
+
+Section 3.2 — Inspection Period
+    The Agreement provided a 45-day inspection period commencing October 15, 2025.
+    The inspection period therefore expired on November 29, 2025. Buyer timely
+    completed Phase I Environmental Site Assessment and structural inspection during
+    this period. STATUS: EXPIRED/COMPLETED.
+
+Section 4.1 — Financing Contingency Deadline
+    Buyer's obligation to close was contingent upon obtaining financing commitment
+    no later than December 15, 2025. Buyer received conditional financing commitment
+    from First Southern Commercial Bank on December 12, 2025. The financing
+    contingency has been satisfied.
+    STATUS: SATISFIED. No further action required.
+
+Section 5.3 — Title Objection Deadline
+    Buyer had 30 days from receipt of the title commitment to raise objections.
+    Title commitment was delivered November 3, 2025; objection deadline was
+    December 3, 2025. No title objections were raised.
+    STATUS: EXPIRED. Buyer is bound by title as-is subject to permitted exceptions.
+
+Section 6.1 — Seller Disclosure Obligation (BREACHED)
+    Seller was contractually required to provide all material environmental
+    disclosures no later than 10 days after contract execution, i.e., by
+    October 25, 2025. Seller failed to disclose the Phase II Environmental
+    Report dated September 8, 2025 (identifying TCE contamination in excess
+    of FDEP action levels). This constitutes a material breach of the Agreement.
+    STATUS: BREACH DOCUMENTED. Basis for rescission/damages claim.
+
+Section 8.1 — CLOSING DEADLINE — CRITICAL
+    The Agreement requires closing to occur no later than February 28, 2026.
+    Given the pending dispute over Seller's nondisclosure, Buyer served written
+    notice of dispute on January 22, 2026 (within the Agreement's 30-day cure
+    period). Seller has until February 21, 2026 to cure or respond.
+    If dispute is not resolved, closing will not occur and Buyer will be entitled
+    to return of earnest money plus damages.
+    DEADLINE: February 28, 2026 — CLOSING (or formal termination by this date).
+    URGENCY: CRITICAL.
+
+Section 8.3 — Time is of the Essence
+    The Agreement expressly provides that time is of the essence with respect to
+    all closing and performance deadlines. Failure to close by February 28, 2026
+    without mutual written extension will constitute a default.
+    ACTION REQUIRED: If dispute is not resolved by February 21, 2026, file
+    for emergency injunctive relief to preserve earnest money prior to closing date.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PART II — LITIGATION DEADLINES
+
+If Buyer elects to pursue litigation for rescission and damages arising from
+Seller's fraudulent concealment, the following limitations and notice deadlines apply:
+
+    1.  Fraudulent Concealment SOL — FLORIDA STATUTE § 95.11(3)(j)
+        Four-year statute of limitations for fraud. Discovery rule applies: SOL
+        runs from the date Buyer discovered or should have discovered the fraud.
+        Buyer first learned of the concealed environmental report on January 8, 2026,
+        when Greenfield's environmental consultant independently obtained the Phase II
+        report from the FDEP public records portal.
+        SOL EXPIRATION: January 8, 2030.
+        STATUS: OPEN — Calendar for monitoring.
+
+    2.  Breach of Contract SOL — FLORIDA STATUTE § 95.11(2)(b)
+        Five-year statute of limitations for written contract claims.
+        Agreement executed October 15, 2025.
+        SOL EXPIRATION: October 15, 2030.
+        STATUS: OPEN — Calendar for monitoring.
+
+    3.  Florida Deceptive and Unfair Trade Practices Act (FDUTPA)
+        FDUTPA claims under § 501.204 carry a four-year SOL.
+        Discovery rule applies; SOL runs from January 8, 2026.
+        SOL EXPIRATION: January 8, 2030.
+        Note: FDUTPA provides for attorney's fees to prevailing party — evaluate
+        whether to include in complaint.
+        STATUS: OPEN — Evaluate for inclusion.
+
+    4.  Demand Response Deadline — CONTRACT NOTICE
+        Buyer's Demand Letter of January 22, 2026 required Seller to respond and
+        cure within 30 days, per Agreement § 14.2. Seller's response is due
+        no later than February 21, 2026.
+        If no response by February 21, 2026, Buyer may terminate Agreement and
+        demand return of earnest money within 5 business days.
+        DEADLINE: February 21, 2026 — SELLER CURE/RESPONSE DUE. HIGH PRIORITY.
+
+    5.  Earnest Money Escrow Release Deadline — CONTRACT/NOTICE
+        South Florida Title Co.'s escrow agreement requires both parties to provide
+        joint instructions for release, or a court order, within 60 days of any
+        dispute notice. Dispute notice was served January 22, 2026. If no joint
+        instructions are received, escrow agent will interplead the funds into court
+        no later than March 23, 2026.
+        DEADLINE: March 23, 2026 — ESCROW INTERPLEADER DEADLINE.
+        ACTION: If dispute unresolved, file motion to confirm entitlement to
+        earnest money prior to March 23, 2026.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PART III — REGULATORY DEADLINES
+
+    6.  FDEP Voluntary Cleanup Tax Credit Application
+        If Buyer takes title and undertakes environmental remediation, Florida's
+        Voluntary Cleanup Tax Credit program (§ 376.30781) requires application
+        within 12 months of beginning remediation activities. This deadline is
+        triggered only if Buyer proceeds with acquisition.
+        STATUS: CONTINGENT. Monitor.
+
+    7.  EPA CERCLA Notice — 60-Day Notice Requirement
+        If Buyer pursues cost recovery against Seller under CERCLA § 107 for
+        remediation costs, Buyer must provide 60-day advance notice to EPA and
+        state environmental agency before filing suit.
+        DEADLINE: Must serve 60-day notice at least 60 days before any CERCLA
+        complaint is filed. Triggered upon decision to file federal environmental claim.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PART IV — CONSOLIDATED DEADLINE CALENDAR
+
+CRITICAL:
+    Feb 21, 2026    Seller cure/response deadline per Demand Letter (§ 14.2)
+    Feb 28, 2026    Contract Closing Deadline (§ 8.1) — Time is of the essence
+
+HIGH:
+    Mar 23, 2026    Escrow interpleader deadline — file motion before this date
+    Jan 8, 2030     FDUTPA / Fraudulent Concealment SOL expiration
+    Oct 15, 2030    Breach of Contract SOL expiration
+
+NORMAL/TRIGGERED:
+    +60 days        EPA/FDEP notice before CERCLA complaint (if applicable)
+    +12 months      FDEP voluntary cleanup tax credit (if remediation undertaken)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Prepared by: Marcus Webb, Paralegal
+Supervising Attorney: Jennifer Cole, Esq.
+This document is protected as attorney work product.
+Do not reproduce or distribute without written authorization.

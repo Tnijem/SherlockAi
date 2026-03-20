@@ -1,0 +1,137 @@
+HARRISON, COLE & ASSOCIATES, P.A.
+INTERNAL MEMORANDUM — PRIVILEGED AND CONFIDENTIAL
+ATTORNEY-CLIENT WORK PRODUCT
+
+TO:     Robert Harrison, Esq.
+FROM:   Sarah Kim, Associate
+DATE:   March 4, 2026
+RE:     Statute of Limitations Analysis — Martinez v. Coastal Healthcare Systems
+        Case No. 26-CV-01847-RLR
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+I. CRITICAL DEADLINE SUMMARY
+
+This memo analyzes all applicable statutes of limitations and notice deadlines
+arising from Maria Elena Martinez's medical malpractice claim against Coastal
+Healthcare Systems and Dr. Raymond Thornton. Given the incident date of
+September 14, 2023, several deadlines are approaching imminently or have
+already been addressed through the filing of the Complaint on March 14, 2025.
+
+URGENT: The following deadlines require immediate calendar verification:
+
+    1.  Medical Malpractice SOL — CRITICAL DEADLINE
+        Florida Statute § 95.11(4)(b) imposes a two-year statute of limitations
+        for medical malpractice claims, running from the date the incident was
+        discovered or should have been discovered through the exercise of due
+        diligence. Ms. Martinez underwent the procedure on September 14, 2023.
+        The discovery date is established as October 2, 2023 (date of second
+        surgical consultation confirming the perforation). The SOL therefore
+        EXPIRED or will EXPIRE on October 2, 2025.
+        STATUS: Complaint filed March 14, 2025 — SOL PRESERVED. No action needed.
+
+    2.  Pre-Suit Notice Requirement — SATISFIED
+        Florida Statute § 766.106 requires a claimant to serve a Notice of Intent
+        to Initiate Litigation at least 90 days prior to filing suit. Our Notice
+        of Intent was served on all defendants on December 6, 2024. The 90-day
+        pre-suit investigation period expired on March 6, 2025. Complaint timely
+        filed March 14, 2026.
+        STATUS: SATISFIED. No further action required on this deadline.
+
+    3.  Wrongful Death Contingency — WATCH
+        In the event Ms. Martinez's condition deteriorates and a wrongful death
+        claim becomes available, Florida Statute § 95.11(4)(d) provides a two-year
+        statute of limitations running from the date of death. Counsel should monitor
+        client's medical status. If prognosis changes, this deadline must be
+        immediately calendared.
+        STATUS: OPEN — Calendar immediately upon any change in medical status.
+
+    4.  Claim Against Hospital Credentialing Department — EVALUATE
+        To the extent we pursue a negligent credentialing theory against Coastal
+        Healthcare for granting privileges to Dr. Thornton despite his prior
+        disciplinary history, the limitations period under § 95.11(4)(b) runs from
+        the date of discovery. Ms. Martinez had no knowledge of Dr. Thornton's
+        prior disciplinary record until our investigator obtained the records on
+        January 15, 2026. Accordingly, the SOL on the negligent credentialing
+        claim does not expire until January 15, 2028.
+        STATUS: OPEN — Must be added to Complaint via amendment by April 15, 2026,
+        or filed as a separate action. See FRCP 15(a).
+
+    5.  Amendment to Add New Defendant — FILING DEADLINE
+        If we intend to add Coastal Healthcare's parent corporation, MedStar Group
+        LLC, as an additional defendant based on the alter ego theory identified in
+        the forensic accountant's preliminary report, we must file a Motion for
+        Leave to Amend Complaint no later than April 15, 2026, consistent with
+        the Court's scheduling order. After that date, amendment requires a showing
+        of good cause under FRCP 16(b)(4).
+        DEADLINE: April 15, 2026 — HIGH PRIORITY.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+II. FLORIDA § 766.106 PRE-SUIT REQUIREMENTS — ANALYSIS
+
+Florida law imposes a mandatory pre-suit process for medical malpractice claims
+that runs concurrently with the SOL analysis above. The following notice requirements
+governed the pre-suit period:
+
+    a.  90-Day Investigation Period: Defendants had 90 days from receipt of Notice
+        of Intent to conduct investigation and respond. Period ran December 6, 2024
+        through March 6, 2025. All defendants rejected the claim within the period.
+
+    b.  Mandatory Presuit Mediation: Florida § 766.108 requires mandatory presuit
+        mediation if either party requests it within the 90-day investigation period.
+        Neither party requested presuit mediation. This obligation has lapsed.
+
+    c.  Medical Expert Affidavit: Complaint was required to be accompanied by a
+        verified written medical expert opinion. Dr. Patricia Williams's affidavit
+        was attached to the Complaint as Exhibit A. SATISFIED.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+III. COLLATERAL DEADLINES — INSURANCE AND NOTICE
+
+    6.  Med-Pay Insurance Lien Notice — UPCOMING
+        Coastal Healthcare's insurer, MedShield National, served a notice of lien
+        on February 28, 2026 asserting a $147,200 subrogation lien against any
+        recovery. Under Florida § 768.76, we must notify MedShield of any settlement
+        discussions no later than 30 days before executing any settlement agreement.
+        This obligation becomes active upon entering settlement negotiations.
+        STATUS: ACTIVE — Must notify insurer 30 days before any settlement. Calendar
+        this as a triggered deadline upon commencement of any settlement discussion.
+
+    7.  Medicare/Medicaid Notice — UPCOMING
+        Ms. Martinez is enrolled in Medicaid. We must provide notice to the Florida
+        Agency for Health Care Administration (AHCA) of any lawsuit affecting a
+        Medicaid recipient. That notice should have been provided within 30 days of
+        filing the Complaint (i.e., by April 14, 2025). Confirm with paralegal team
+        whether AHCA notice was sent. If not, send immediately — this is an
+        OVERDUE obligation that could affect our ability to distribute any recovery.
+        DEADLINE: OVERDUE — Confirm compliance immediately.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+IV. RECOMMENDED CALENDAR ENTRIES
+
+The following deadlines should be immediately entered into the firm's calendar
+system with the urgency levels indicated:
+
+Priority 1 — CRITICAL (Red):
+    • October 2, 2025 — Medical Malpractice SOL — PRESERVED by filing (confirm)
+
+Priority 2 — HIGH (Orange):
+    • April 14, 2025 — AHCA Medicaid Notice (CONFIRM — may be overdue)
+    • April 15, 2026 — Motion to Amend Complaint (add MedStar Group LLC)
+    • April 15, 2026 — Motion to Amend Complaint (add negligent credentialing theory)
+    • January 15, 2028 — Negligent Credentialing SOL (discovery rule)
+
+Priority 3 — NORMAL (Yellow):
+    • Triggered: MedShield lien notice 30 days before any settlement execution
+    • Triggered: Monitor wrongful death SOL if Ms. Martinez's condition changes
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Prepared by: Sarah Kim, Associate
+Reviewed by: [Pending Review]
+Distribution: Robert Harrison, Esq. (Attorney of Record) ONLY
+This memorandum contains attorney-client privileged communications and attorney
+work product. Do not distribute without prior written authorization.

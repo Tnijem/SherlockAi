@@ -1,0 +1,89 @@
+#cloud-config
+# Ubuntu Server 24.04 LTS — Automated install for Sherlock NUC
+# Ventoy usage: place this file + meta-data in a folder called
+#   "sherlock-autoinstall" on the Ventoy USB, then see README.md
+
+autoinstall:
+  version: 1
+
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  # ── Disk layout ────────────────────────────────────────────────────────────
+  # Wipes first disk and uses LVM. Adjust 'id' if NUC has nvme (nvme0n1).
+  # GEEKOM A8 Max uses NVMe SSD (nvme0n1)
+  storage:
+    layout:
+      name: lvm
+    config:
+      - type: disk
+        id: disk-nvme
+        match:
+          size: largest        # picks the largest drive — works for nvme0n1
+        wipe: superblock-recursive
+        preserve: false
+        grub_device: true
+      - type: partition
+        id: part-boot
+        device: disk-nvme
+        size: 1G
+        flag: boot
+        grub_device: true
+      - type: partition
+        id: part-lvm
+        device: disk-nvme
+        size: -1               # rest of disk
+      - type: lvm_volgroup
+        id: vg0
+        name: ubuntu-vg
+        devices: [part-lvm]  # nvme partition
+      - type: lvm_partition
+        id: lv-root
+        volgroup: vg0
+        name: ubuntu-lv
+        size: -1               # all of vg
+      - type: format
+        id: fmt-boot
+        volume: part-boot
+        fstype: ext4
+      - type: format
+        id: fmt-root
+        volume: lv-root
+        fstype: ext4
+      - type: mount
+        id: mnt-root
+        device: fmt-root
+        path: /
+      - type: mount
+        id: mnt-boot
+        device: fmt-boot
+        path: /boot
+
+  # ── User ──────────────────────────────────────────────────────────────────
+  identity:
+    hostname: sherlock
+    username: sherlock
+    # Password: Sherlock2024! — CHANGE AFTER FIRST LOGIN
+    password: "$6$sherlock2024$aX.8zpJXvuV8YhQxlKmGk8gcfafqAg8wxqynFXtOQPcWz1oagePwrA8HlFSBa.0y49tKR9S13kvwOd52Bg7sW/"
+
+  # ── SSH ───────────────────────────────────────────────────────────────────
+  ssh:
+    install-server: true
+    allow-pw: true             # disable after adding SSH keys
+
+  # ── Packages installed during OS setup ───────────────────────────────────
+  packages:
+    - curl
+    - wget
+    - git
+    - build-essential
+    - ufw
+
+  # ── Run Sherlock installer after first boot ───────────────────────────────
+  late-commands:
+    - curtin in-target --target=/target -- bash -c "echo 'sherlock ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/sherlock"
+    - curtin in-target --target=/target -- bash -c "mkdir -p /home/sherlock/setup && chown sherlock:sherlock /home/sherlock/setup"
+
+  # ── Automatic reboot after install ───────────────────────────────────────
+  shutdown: reboot
