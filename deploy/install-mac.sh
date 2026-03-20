@@ -23,7 +23,7 @@ hdr()  { echo -e "\n${BOLD}${BLUE}══  $*  ══${RESET}" | tee -a "${LOG}";
 fail() { echo -e "\n  ${RED}✗  ERROR: $*${RESET}\n"; exit 1; }
 
 # ── Detect script location (USB or local) ─────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)" 2>/dev/null || SCRIPT_DIR="$(pwd)"
 # Walk up to find sherlock-bundle or use script dir as bundle root
 if [[ -f "${SCRIPT_DIR}/sherlock-source.tar.gz" ]]; then
   BUNDLE_DIR="${SCRIPT_DIR}"
