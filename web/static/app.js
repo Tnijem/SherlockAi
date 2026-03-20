@@ -272,20 +272,39 @@ async function loadLogs() {
   }
 
   if (!entries || !entries.length) {
-    viewer.innerHTML = '<div class="log-table"><div class="log-empty">No log entries match.</div></div>';
+    viewer.innerHTML = '<div class="log-empty" style="padding:16px;">No log entries match.</div>';
     return;
+  }
+
+  // Apply sort
+  const sort = viewer._logSort || { col: null, dir: 1 };
+  if (sort.col) {
+    entries = [...entries].sort((a, b) => {
+      let va, vb;
+      if (sort.col === 'ts')  { va = a.ts || ''; vb = b.ts || ''; }
+      else if (sort.col === 'lvl') { va = a.level || ''; vb = b.level || ''; }
+      else if (sort.col === 'msg') { va = a.msg || a.message || ''; vb = b.msg || b.message || ''; }
+      else { va = ''; vb = ''; }
+      return va < vb ? -sort.dir : va > vb ? sort.dir : 0;
+    });
   }
 
   const atBottom = viewer.scrollHeight - viewer.scrollTop - viewer.clientHeight < 60;
   const skip = new Set(['ts', 'level', 'logger', 'msg', 'message', 'rid', 'exc_info']);
 
-  let html = `<div class="log-table" id="logTable">
-    <div class="log-table-head">
-      <span data-col="ts">Time</span>
-      <span data-col="lvl">Level</span>
-      <span data-col="msg">Message</span>
-      <span data-col="detail">Details</span>
-    </div>`;
+  function sortIcon(col) {
+    if (sort.col !== col) return '<span class="log-sort-icon">⇅</span>';
+    return `<span class="log-sort-icon active">${sort.dir === 1 ? '↑' : '↓'}</span>`;
+  }
+
+  // Header is a separate sticky element OUTSIDE the grid
+  let html = `<div class="log-table-head" id="logTableHead">
+    <span data-col="ts">Time ${sortIcon('ts')}</span>
+    <span data-col="lvl">Level ${sortIcon('lvl')}</span>
+    <span data-col="msg">Message ${sortIcon('msg')}</span>
+    <span data-col="detail">Details</span>
+  </div>
+  <div class="log-table" id="logTable">`;
 
   entries.forEach((entry, i) => {
     const lvl = (entry.level || 'INFO').toUpperCase();
@@ -312,6 +331,17 @@ async function loadLogs() {
   viewer._logEntries = entries;
 
   if (atBottom) viewer.scrollTop = viewer.scrollHeight;
+
+  // Column sort click handlers
+  viewer.querySelectorAll('.log-table-head > span[data-col]').forEach(span => {
+    const col = span.dataset.col;
+    if (col === 'detail') return; // details not sortable
+    span.addEventListener('click', (e) => {
+      const cur = viewer._logSort || { col: null, dir: 1 };
+      viewer._logSort = { col, dir: cur.col === col ? -cur.dir : 1 };
+      loadLogs();
+    });
+  });
 
   // Set up column resize
   initLogColResize();
@@ -344,21 +374,30 @@ function toggleLogDetail(row) {
 }
 
 function initLogColResize() {
+  const head  = document.getElementById('logTableHead');
   const table = document.getElementById('logTable');
-  if (!table) return;
-  const heads = table.querySelectorAll('.log-table-head > span');
+  if (!head || !table) return;
+  const heads = head.querySelectorAll('span[data-col]');
+  const colNames = ['--log-col-ts', '--log-col-lvl', '--log-col-msg', '--log-col-detail'];
 
-  heads.forEach((head, i) => {
-    head.addEventListener('mousedown', (e) => {
+  heads.forEach((h, i) => {
+    h.style.cursor = 'pointer';
+    h.addEventListener('mousedown', (e) => {
+      // Only start a resize drag when clicking within 8px of the right edge
+      const rect = h.getBoundingClientRect();
+      if (e.clientX < rect.right - 8) return;
+
       e.preventDefault();
       const startX = e.clientX;
-      const startW = head.offsetWidth;
-      const colNames = ['--log-col-ts', '--log-col-lvl', '--log-col-msg', '--log-col-detail'];
+      const startW = h.offsetWidth;
+      let moved = false;
 
       function onMove(ev) {
+        moved = true;
         const diff = ev.clientX - startX;
         const newW = Math.max(40, startW + diff);
-        table.style.setProperty(colNames[i], newW + 'px');
+        const viewer = document.getElementById('logViewer');
+        viewer?.style.setProperty(colNames[i], newW + 'px');
       }
       function onUp() {
         document.removeEventListener('mousemove', onMove);
@@ -1534,6 +1573,108 @@ async function loadAdmin() {
   loadUsers();
   loadLogs();
   loadUsage(7);
+  checkForUpdate(true); // silent background check on load
+}
+
+// ── Update / Upgrade ──────────────────────────────────────────────────────────
+
+let _upgradePoller = null;
+
+async function checkForUpdate(silent = false) {
+  const btn = document.getElementById('checkUpdateBtn');
+  const badge = document.getElementById('updateBadge');
+  const vbadge = document.getElementById('versionBadge');
+  const notes = document.getElementById('updateNotes');
+  const msg = document.getElementById('updateStatusMsg');
+  const upgradeNow = document.getElementById('upgradeNowBtn');
+  const upgrade3am = document.getElementById('upgrade3amBtn');
+
+  if (!silent && btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+  try {
+    const d = await api('GET', '/api/admin/update/check');
+    if (vbadge) vbadge.textContent = `v${d.current}`;
+    if (d.error && !silent) { toast('Update check failed: ' + d.error, 'error'); return; }
+    if (d.update_available) {
+      badge?.classList.remove('hidden');
+      upgradeNow?.classList.remove('hidden');
+      upgrade3am?.classList.remove('hidden');
+      if (msg) msg.textContent = `v${d.latest} available`;
+      if (notes && d.release_notes) {
+        notes.textContent = d.release_notes;
+        notes.classList.remove('hidden');
+      }
+      // Store latest version for apply call
+      if (upgradeNow) upgradeNow.dataset.version = d.latest;
+      if (!silent) toast(`Update available: ${d.latest}`, 'info');
+    } else {
+      badge?.classList.add('hidden');
+      upgradeNow?.classList.add('hidden');
+      upgrade3am?.classList.add('hidden');
+      if (!silent && msg) msg.textContent = 'Already up to date.';
+    }
+  } catch (e) {
+    if (!silent) toast('Update check failed: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⟳ Check for Update'; }
+  }
+}
+
+async function applyUpdate() {
+  if (!confirm('Apply update now? Sherlock will restart briefly.')) return;
+  const msg = document.getElementById('updateStatusMsg');
+  const log = document.getElementById('upgradeLog');
+  if (msg) msg.textContent = 'Starting upgrade…';
+  if (log) { log.textContent = ''; log.classList.remove('hidden'); }
+
+  try {
+    await api('POST', '/api/admin/update/apply');
+    toast('Upgrade started — watch the log below.', 'info');
+    _startUpgradePoller();
+  } catch (e) {
+    toast('Upgrade failed: ' + e.message, 'error');
+    if (msg) msg.textContent = 'Error: ' + e.message;
+  }
+}
+
+function _startUpgradePoller() {
+  if (_upgradePoller) return;
+  _upgradePoller = setInterval(async () => {
+    try {
+      const s = await api('GET', '/api/admin/update/status');
+      const log = document.getElementById('upgradeLog');
+      const msg = document.getElementById('updateStatusMsg');
+      const vbadge = document.getElementById('versionBadge');
+
+      if (log) log.textContent = s.log.join('\n');
+      if (vbadge && s.version) vbadge.textContent = `v${s.version}`;
+
+      if (!s.running) {
+        clearInterval(_upgradePoller);
+        _upgradePoller = null;
+        if (s.error) {
+          if (msg) msg.textContent = '✗ ' + s.error;
+          toast('Upgrade failed: ' + s.error, 'error');
+        } else {
+          if (msg) msg.textContent = `✓ Upgraded to ${s.version}`;
+          toast(`Upgrade complete: ${s.version}`, 'success');
+          checkForUpdate(true);
+        }
+      }
+    } catch (_) {}
+  }, 2000);
+}
+
+async function scheduleUpdate(timeStr) {
+  const input = prompt('Schedule upgrade at time (HH:MM 24h):', timeStr || '03:00');
+  if (!input) return;
+  try {
+    const d = await api('POST', '/api/admin/update/schedule', { time: input });
+    const msg = document.getElementById('updateStatusMsg');
+    if (msg) msg.textContent = `Upgrade scheduled at ${input} (via ${d.method})`;
+    toast(`Upgrade scheduled at ${input}`, 'success');
+  } catch (e) {
+    toast('Schedule failed: ' + e.message, 'error');
+  }
 }
 
 async function loadSystemStatus() {

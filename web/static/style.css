@@ -853,6 +853,68 @@ input:focus, textarea:focus, select:focus {
 .stat-status.up { color: var(--success); }
 .stat-status.down { color: var(--danger); }
 
+.version-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: monospace;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+.update-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--gold);
+  border-radius: 4px;
+  padding: 2px 8px;
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.7; }
+}
+.btn-primary-sm {
+  background: var(--gold);
+  color: #000;
+  font-weight: 600;
+  border-color: var(--gold);
+}
+.btn-primary-sm:hover { opacity: 0.88; }
+.update-status-msg {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.upgrade-log {
+  margin-top: 10px;
+  background: #06080d;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #a0b4c8;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+.update-notes {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  white-space: pre-wrap;
+  max-height: 100px;
+  overflow-y: auto;
+}
+[data-theme="tron"] .update-badge { color: #000408; background: var(--gold); }
+[data-theme="tron"] .upgrade-log  { background: #000408; border-color: rgba(0,229,255,0.15); color: #4fb8d0; }
+
 .user-table { width: 100%; border-collapse: collapse; }
 .user-table th {
   text-align: left;
@@ -1502,14 +1564,11 @@ input:focus, textarea:focus, select:focus {
   background: #0a0c10;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 8px 10px;
+  padding: 0;
   overflow-y: auto;
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 11.5px;
   line-height: 1.5;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
 }
 
 .log-viewer::-webkit-scrollbar { width: 6px; }
@@ -1517,22 +1576,15 @@ input:focus, textarea:focus, select:focus {
 .log-viewer::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 /* Log table (resizable columns via CSS grid) */
-.log-table {
-  display: grid;
-  grid-template-columns: var(--log-col-ts, 145px) var(--log-col-lvl, 62px) var(--log-col-msg, 1fr) var(--log-col-detail, 1fr);
-  font-size: 11.5px;
-  line-height: 1.45;
-}
-
 .log-table-head {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: var(--log-col-ts, 145px) var(--log-col-lvl, 62px) var(--log-col-msg, 1fr) var(--log-col-detail, 1fr);
+  /* Sticky header — lives OUTSIDE .log-table so it truly sticks */
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--bg, #0d1017);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: grid;
+  grid-template-columns: var(--log-col-ts, 145px) var(--log-col-lvl, 62px) var(--log-col-msg, 1fr) var(--log-col-detail, 1fr);
+  background: #0a0c10;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
 }
 
 .log-table-head > span {
@@ -1541,13 +1593,30 @@ input:focus, textarea:focus, select:focus {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 5px 6px;
-  cursor: col-resize;
+  padding: 6px 8px;
   user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
   position: relative;
 }
-.log-table-head > span:hover {
-  color: var(--text);
+.log-table-head > span:hover { color: var(--text); }
+.log-table-head > span::after {
+  content: '';
+  position: absolute;
+  right: 0; top: 20%; bottom: 20%;
+  width: 1px;
+  background: rgba(255,255,255,0.08);
+}
+
+.log-sort-icon { opacity: 0.35; margin-left: 3px; font-style: normal; }
+.log-sort-icon.active { opacity: 1; color: var(--gold); }
+
+.log-table {
+  display: grid;
+  grid-template-columns: var(--log-col-ts, 145px) var(--log-col-lvl, 62px) var(--log-col-msg, 1fr) var(--log-col-detail, 1fr);
+  font-size: 11.5px;
+  line-height: 1.45;
 }
 
 /* Column resize handle */
@@ -2332,6 +2401,10 @@ input:focus, textarea:focus, select:focus {
 [data-theme="tron"] .log-viewer {
   background: #000408;
   border-color: #0c4a6e;
+}
+[data-theme="tron"] .log-table-head {
+  background: #000408;
+  border-bottom-color: rgba(0,229,255,0.15);
 }
 [data-theme="tron"] .log-entry { border-bottom-color: #071828; }
 [data-theme="tron"] .log-level-error { color: #ff2b5e; }

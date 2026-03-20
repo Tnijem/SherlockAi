@@ -214,10 +214,22 @@
         <div class="admin-top">
           <div class="view-title" style="padding:0;margin-bottom:20px;">Admin</div>
 
-          <div class="admin-section">
-            <h3>System Status</h3>
+          <div class="admin-section" id="updateSection">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+              <h3 style="margin:0;">System Status</h3>
+              <span class="version-badge" id="versionBadge"></span>
+              <span class="update-badge hidden" id="updateBadge">&#8593; Update Available</span>
+            </div>
             <div class="stat-grid" id="statGrid"></div>
-            <button class="btn" onclick="triggerReindex()" id="reindexBtn">&#8635; Re-index NAS</button>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+              <button class="btn" onclick="triggerReindex()" id="reindexBtn">&#8635; Re-index NAS</button>
+              <button class="btn" onclick="checkForUpdate()" id="checkUpdateBtn">&#8635; Check for Update</button>
+              <button class="btn btn-primary-sm hidden" onclick="applyUpdate()" id="upgradeNowBtn">&#8593; Upgrade Now</button>
+              <button class="btn hidden" onclick="scheduleUpdate('03:00')" id="upgrade3amBtn">&#9200; Upgrade at 3am</button>
+              <span class="update-status-msg" id="updateStatusMsg"></span>
+            </div>
+            <div class="upgrade-log hidden" id="upgradeLog"></div>
+            <div class="update-notes hidden" id="updateNotes"></div>
           </div>
 
           <div class="admin-section">

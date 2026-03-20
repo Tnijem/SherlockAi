@@ -2606,6 +2606,130 @@ def export_all_tasks(
     )
 
 
+# ── Update / Upgrade ─────────────────────────────────────────────────────────
+
+_SHERLOCK_ROOT   = Path(__file__).parent.parent
+_VERSION_FILE    = _SHERLOCK_ROOT / "VERSION"
+_UPGRADE_SCRIPT  = _SHERLOCK_ROOT / "scripts" / "upgrade.sh"
+_GITHUB_REPO     = "Tnijem/SherlockAi"
+_upgrade_status: dict = {"running": False, "log": [], "error": None}
+
+
+def _local_version() -> str:
+    try:
+        return _VERSION_FILE.read_text().strip()
+    except Exception:
+        return "unknown"
+
+
+@app.get("/api/admin/update/check")
+def check_for_update(_: User = Depends(auth.require_admin)):
+    """Check GitHub releases for a newer version."""
+    import urllib.request, json as _json
+    current = _local_version()
+    try:
+        url = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/latest"
+        req = urllib.request.Request(url, headers={"User-Agent": "Sherlock-Updater/1.0"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = _json.loads(resp.read())
+        latest = data.get("tag_name", "").strip()
+        body   = data.get("body", "")
+        assets = [a["browser_download_url"] for a in data.get("assets", [])
+                  if a["name"] == "sherlock-source.tar.gz"]
+        return {
+            "current":       current,
+            "latest":        latest,
+            "update_available": latest != current and latest != "",
+            "release_notes": body[:600] if body else "",
+            "asset_url":     assets[0] if assets else None,
+        }
+    except Exception as exc:
+        return {"current": current, "latest": None, "update_available": False,
+                "error": str(exc)}
+
+
+@app.post("/api/admin/update/apply")
+def apply_update(_: User = Depends(auth.require_admin)):
+    """Trigger an immediate upgrade in the background."""
+    import subprocess, threading
+    if _upgrade_status["running"]:
+        raise HTTPException(status_code=409, detail="Upgrade already in progress.")
+    if not _UPGRADE_SCRIPT.exists():
+        raise HTTPException(status_code=500, detail="Upgrade script not found.")
+
+    def _run():
+        _upgrade_status["running"] = True
+        _upgrade_status["log"]     = []
+        _upgrade_status["error"]   = None
+        try:
+            proc = subprocess.Popen(
+                ["bash", str(_UPGRADE_SCRIPT), "--yes"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            )
+            for line in proc.stdout:
+                _upgrade_status["log"].append(line.rstrip())
+            proc.wait()
+            if proc.returncode != 0:
+                _upgrade_status["error"] = f"Upgrade exited with code {proc.returncode}"
+        except Exception as exc:
+            _upgrade_status["error"] = str(exc)
+        finally:
+            _upgrade_status["running"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    audit("upgrade_started", user="admin")
+    return {"status": "started"}
+
+
+@app.get("/api/admin/update/status")
+def upgrade_status(_: User = Depends(auth.require_admin)):
+    """Poll progress of an in-flight or completed upgrade."""
+    return {
+        "running": _upgrade_status["running"],
+        "log":     _upgrade_status["log"][-50:],   # last 50 lines
+        "error":   _upgrade_status["error"],
+        "version": _local_version(),
+    }
+
+
+@app.post("/api/admin/update/schedule")
+def schedule_update(
+    body: dict,
+    _: User = Depends(auth.require_admin),
+):
+    """Schedule upgrade via cron (time = 'HH:MM', default '03:00')."""
+    import subprocess
+    time_str  = body.get("time", "03:00")
+    try:
+        hh, mm = [int(x) for x in time_str.split(":")]
+        if not (0 <= hh <= 23 and 0 <= mm <= 59):
+            raise ValueError
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid time. Use HH:MM (24h).")
+
+    script = str(_UPGRADE_SCRIPT)
+    # Use `at` if available, else cron
+    try:
+        subprocess.run(
+            ["bash", "-c", f"echo 'bash {script} --yes >> /tmp/sherlock-upgrade.log 2>&1' | at {hh:02d}:{mm:02d}"],
+            check=True, capture_output=True
+        )
+        method = "at"
+    except Exception:
+        # Fallback: add a cron entry for tonight only (removes itself after running)
+        cron_line = f"{mm} {hh} * * * bash {script} --yes >> /tmp/sherlock-upgrade.log 2>&1 # sherlock-upgrade-once"
+        result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+        existing = result.stdout if result.returncode == 0 else ""
+        # Remove any old scheduled entry first
+        cleaned = "\n".join(l for l in existing.splitlines() if "# sherlock-upgrade-once" not in l)
+        new_cron = cleaned.rstrip("\n") + "\n" + cron_line + "\n"
+        subprocess.run(["crontab", "-"], input=new_cron, text=True, check=True)
+        method = "cron"
+
+    audit("upgrade_scheduled", user="admin", time=time_str, method=method)
+    return {"status": "scheduled", "time": time_str, "method": method}
+
+
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
