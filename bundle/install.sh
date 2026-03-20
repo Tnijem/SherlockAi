@@ -1,10 +1,10 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════════
-# Sherlock — OFFLINE Installer (runs on NUC after Ubuntu install)
+# Sherlock AI — OFFLINE Installer (runs on NUC after Ubuntu install)
 # ═══════════════════════════════════════════════════════════════════════════════
 # Usage:
-#   1. Mount Ventoy USB (or copy sherlock-bundle/ to ~/setup/)
-#   2. cd /path/to/sherlock-bundle
+#   1. Mount Ventoy USB:  sudo mkdir -p /mnt/usb && sudo mount /dev/sda1 /mnt/usb
+#   2. cd /mnt/usb/sherlock-bundle
 #   3. chmod +x install.sh && ./install.sh
 # ═══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -15,7 +15,7 @@ VENV="${SHERLOCK_DIR}/venv"
 LOG_DIR="${SHERLOCK_DIR}/logs"
 LOG="${LOG_DIR}/install-$(date +%Y%m%d-%H%M%S).log"
 
-OLLAMA_LLM_MODEL="gemma3:12b"   # 32 GB RAM — use 12b for better legal reasoning
+OLLAMA_LLM_MODEL="gemma3:12b"
 OLLAMA_EMBED_MODEL="mxbai-embed-large"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -25,7 +25,7 @@ ok()   { echo -e "  ${GREEN}✓${RESET}  $*" | tee -a "${LOG}"; }
 warn() { echo -e "  ${YELLOW}⚠${RESET}  $*" | tee -a "${LOG}"; }
 step() { echo -e "  ${BLUE}→${RESET}  $*" | tee -a "${LOG}"; }
 hdr()  { echo -e "\n${BOLD}${BLUE}══  $*  ══${RESET}" | tee -a "${LOG}"; }
-fail() { echo -e "  ${RED}✗  $*${RESET}"; exit 1; }
+fail() { echo -e "  ${RED}✗  ERROR: $*${RESET}"; exit 1; }
 
 mkdir -p "${LOG_DIR}"
 echo "Sherlock Offline Install — $(date)" > "${LOG}"
@@ -40,7 +40,7 @@ echo ""
 [[ "${EUID}" -eq 0 ]] && fail "Run as the sherlock user, not root."
 sudo -v || fail "No sudo access."
 
-# ── 1. System packages from local .deb cache ─────────────────────────────────
+# ── 1. System packages ────────────────────────────────────────────────────────
 hdr "Step 1: System Packages (offline)"
 
 APT_CACHE="${BUNDLE_DIR}/apt-packages"
@@ -48,13 +48,11 @@ APT_CACHE="${BUNDLE_DIR}/apt-packages"
 if [[ -d "${APT_CACHE}" ]] && ls "${APT_CACHE}"/*.deb &>/dev/null; then
   step "Installing from local .deb cache..."
 
-  # Create a temporary local apt repo
   REPO_DIR="/tmp/sherlock-apt-repo"
   sudo mkdir -p "${REPO_DIR}"
   sudo cp "${APT_CACHE}"/*.deb "${REPO_DIR}/"
   (cd "${REPO_DIR}" && sudo dpkg-scanpackages . /dev/null | sudo gzip -9c | sudo tee Packages.gz > /dev/null)
 
-  # Add local repo to sources
   echo "deb [trusted=yes] file://${REPO_DIR} ./" | \
     sudo tee /etc/apt/sources.list.d/sherlock-local.list > /dev/null
 
@@ -77,101 +75,26 @@ else
     python3 python3-pip python3-venv python3-dev \
     git nginx tesseract-ocr tesseract-ocr-eng \
     libreoffice-writer libreoffice-calc ffmpeg \
-    ufw jq sqlite3 >> "${LOG}" 2>&1
+    ufw jq sqlite3 2>>"${LOG}" || warn "Some packages failed"
 fi
 
-# ── 2. Docker CE from static binaries ────────────────────────────────────────
-hdr "Step 2: Docker CE (offline)"
-
-DOCKER_TGZ=$(ls "${BUNDLE_DIR}/docker/"docker-*.tgz 2>/dev/null | head -1)
-
-if command -v docker &>/dev/null; then
-  ok "Docker already installed: $(docker --version)"
-elif [[ -n "${DOCKER_TGZ}" ]]; then
-  step "Installing Docker from static binaries..."
-  DOCKER_TMP=$(mktemp -d)
-  tar -xzf "${DOCKER_TGZ}" -C "${DOCKER_TMP}"
-  sudo cp "${DOCKER_TMP}/docker/"* /usr/local/bin/
-  rm -rf "${DOCKER_TMP}"
-
-  # Install Docker Compose plugin
-  sudo mkdir -p /usr/local/lib/docker/cli-plugins
-  sudo cp "${BUNDLE_DIR}/docker/docker-compose" /usr/local/lib/docker/cli-plugins/docker-compose
-
-  # Create Docker system service
-  sudo tee /etc/systemd/system/docker.service > /dev/null << 'DOCKERSVC'
-[Unit]
-Description=Docker Application Container Engine
-After=network-online.target firewalld.service containerd.service time-set.target
-Wants=network-online.target
-
-[Service]
-Type=notify
-ExecStart=/usr/local/bin/dockerd
-ExecReload=/bin/kill -s HUP $MAINPID
-TimeoutStartSec=0
-RestartSec=2
-Restart=always
-StartLimitBurst=3
-StartLimitInterval=60s
-LimitNOFILE=infinity
-LimitNPROC=infinity
-LimitCORE=infinity
-
-[Install]
-WantedBy=multi-user.target
-DOCKERSVC
-
-  sudo tee /etc/systemd/system/docker.socket > /dev/null << 'DOCKERSOCK'
-[Unit]
-Description=Docker Socket for the API
-PartOf=docker.service
-
-[Socket]
-ListenStream=/var/run/docker.sock
-SocketMode=0660
-SocketUser=root
-SocketGroup=docker
-
-[Install]
-WantedBy=sockets.target
-DOCKERSOCK
-
-  sudo groupadd docker 2>/dev/null || true
-  sudo usermod -aG docker "${USER}"
-  sudo mkdir -p /var/lib/docker
-  sudo systemctl daemon-reload
-  sudo systemctl enable docker.socket docker.service >> "${LOG}" 2>&1
-  sudo systemctl start docker.socket docker.service  >> "${LOG}" 2>&1
-  ok "Docker CE installed from static binaries"
-else
-  fail "Docker binary not found in bundle and docker is not installed."
-fi
-
-# ── 3. Load Docker images ─────────────────────────────────────────────────────
-hdr "Step 3: Docker Images (ChromaDB + SearXNG)"
-
-for img_file in "${BUNDLE_DIR}/docker-images/"*.tar.gz; do
-  [[ -f "${img_file}" ]] || continue
-  img_name=$(basename "${img_file}" .tar.gz)
-  step "Loading Docker image: ${img_name}..."
-  gunzip -c "${img_file}" | sudo docker load >> "${LOG}" 2>&1
-  ok "Loaded: ${img_name}"
-done
-
-# ── 4. Ollama from local binary ───────────────────────────────────────────────
-hdr "Step 4: Ollama (offline)"
+# ── 2. Ollama ─────────────────────────────────────────────────────────────────
+hdr "Step 2: Ollama (offline)"
 
 OLLAMA_BIN="${BUNDLE_DIR}/ollama/ollama-linux-amd64"
 
 if command -v ollama &>/dev/null; then
   ok "Ollama already installed"
 else
-  step "Installing Ollama from local binary..."
-  sudo cp "${OLLAMA_BIN}" /usr/local/bin/ollama
-  sudo chmod +x /usr/local/bin/ollama
+  if [[ -f "${OLLAMA_BIN}" ]]; then
+    step "Installing Ollama from local binary..."
+    sudo cp "${OLLAMA_BIN}" /usr/local/bin/ollama
+    sudo chmod +x /usr/local/bin/ollama
+  else
+    warn "Ollama binary not in bundle — downloading..."
+    curl -fsSL https://ollama.com/install.sh | sh >> "${LOG}" 2>&1 || fail "Ollama install failed"
+  fi
 
-  # Create ollama user and service
   sudo useradd -r -s /bin/false -m -d /usr/share/ollama ollama 2>/dev/null || true
   sudo usermod -aG ollama "${USER}"
 
@@ -190,7 +113,7 @@ Environment="HOME=/usr/share/ollama"
 Environment="OLLAMA_HOST=127.0.0.1:11434"
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 OLLAMASVC
 
   sudo systemctl daemon-reload
@@ -199,103 +122,96 @@ OLLAMASVC
   ok "Ollama installed and started"
 fi
 
-# ── 5. Restore Ollama model blobs ─────────────────────────────────────────────
-hdr "Step 5: AI Models (offline)"
+# ── 3. AI Models ──────────────────────────────────────────────────────────────
+hdr "Step 3: AI Models (offline)"
 
 MODELS_SRC="${BUNDLE_DIR}/ollama/models"
 OLLAMA_HOME="/usr/share/ollama/.ollama"
 
 if [[ -d "${MODELS_SRC}" ]]; then
-  step "Restoring model blobs to Ollama model directory..."
+  step "Restoring model blobs..."
   sudo mkdir -p "${OLLAMA_HOME}"
-  sudo rsync -a "${MODELS_SRC}/" "${OLLAMA_HOME}/models/"
+  sudo rsync -a "${MODELS_SRC}/" "${OLLAMA_HOME}/models/" >> "${LOG}" 2>&1
   sudo chown -R ollama:ollama "${OLLAMA_HOME}"
-  ok "Model blobs restored"
-
-  # Restart Ollama to pick up models
   sudo systemctl restart ollama >> "${LOG}" 2>&1
-  sleep 3
+  sleep 4
 
-  # Verify
   for i in $(seq 1 20); do
-    if ollama list 2>/dev/null | grep -q "embed\|gemma\|llama"; then
-      ok "Models available: $(ollama list 2>/dev/null | grep -v NAME | awk '{print $1}' | tr '\n' ' ')"
+    if ollama list 2>/dev/null | grep -qE "gemma|embed|llama"; then
+      ok "Models ready: $(ollama list 2>/dev/null | grep -v NAME | awk '{print $1}' | tr '\n' ' ')"
       break
     fi
     sleep 2
-    [[ $i -eq 20 ]] && warn "Models not appearing — may need: sudo systemctl restart ollama"
+    [[ $i -eq 20 ]] && warn "Models not appearing yet — run: sudo systemctl restart ollama"
   done
 else
-  warn "No model blobs found in bundle — will pull on first use (requires internet)"
+  warn "No model blobs in bundle — will pull on first use (requires internet)"
 fi
 
-# ── 6. Sherlock source code ───────────────────────────────────────────────────
-hdr "Step 6: Sherlock Source Code"
+# ── 4. Sherlock source ────────────────────────────────────────────────────────
+hdr "Step 4: Sherlock Source Code"
 
 SHERLOCK_ARCHIVE="${BUNDLE_DIR}/sherlock-source.tar.gz"
 
-if [[ -d "${SHERLOCK_DIR}/.git" ]]; then
-  ok "Sherlock already installed — skipping extract"
+if [[ -f "${SHERLOCK_DIR}/web/main.py" ]]; then
+  ok "Sherlock source already present — skipping extract"
 elif [[ -f "${SHERLOCK_ARCHIVE}" ]]; then
-  step "Extracting Sherlock source..."
-  tar -xzf "${SHERLOCK_ARCHIVE}" -C "${HOME}/"
-  ok "Sherlock extracted to ${SHERLOCK_DIR}"
+  step "Extracting Sherlock source to ${SHERLOCK_DIR}..."
+  mkdir -p "${SHERLOCK_DIR}"
+  tar -xzf "${SHERLOCK_ARCHIVE}" -C "${SHERLOCK_DIR}/" >> "${LOG}" 2>&1
+  ok "Sherlock source extracted"
 else
   fail "No sherlock-source.tar.gz found in bundle"
 fi
 
-# ── 7. Python virtual environment ────────────────────────────────────────────
-hdr "Step 7: Python Environment (offline)"
-
-WHEELS_DIR="${BUNDLE_DIR}/pip-wheels"
+# ── 5. Python virtual environment ─────────────────────────────────────────────
+hdr "Step 5: Python Environment"
 
 if [[ ! -d "${VENV}" ]]; then
   step "Creating Python virtual environment..."
   python3 -m venv "${VENV}" >> "${LOG}" 2>&1
   ok "venv created"
+else
+  ok "venv already exists"
 fi
 
-if [[ -d "${WHEELS_DIR}" ]] && ls "${WHEELS_DIR}"/*.whl &>/dev/null; then
-  step "Installing Python packages from local wheel cache..."
-  "${VENV}/bin/pip" install --upgrade pip --no-index \
-    --find-links "${WHEELS_DIR}" pip >> "${LOG}" 2>&1 || \
-  "${VENV}/bin/pip" install --upgrade pip -q >> "${LOG}" 2>&1
+WHEELS_DIR="${BUNDLE_DIR}/pip-wheels"
 
+if [[ -d "${WHEELS_DIR}" ]] && ls "${WHEELS_DIR}"/*.whl &>/dev/null 2>&1; then
+  step "Installing Python packages from local wheel cache..."
+  "${VENV}/bin/pip" install --upgrade pip --quiet >> "${LOG}" 2>&1 || true
   "${VENV}/bin/pip" install \
     --no-index \
     --find-links "${WHEELS_DIR}" \
     -r "${SHERLOCK_DIR}/requirements.txt" \
-    >> "${LOG}" 2>&1
-  ok "Python packages installed from local cache"
+    >> "${LOG}" 2>&1 \
+  && ok "Python packages installed from local cache" \
+  || {
+    warn "Offline wheel install incomplete — trying online fallback..."
+    "${VENV}/bin/pip" install -q -r "${SHERLOCK_DIR}/requirements.txt" >> "${LOG}" 2>&1 \
+      && ok "Python packages installed (online)"
+  }
 else
-  warn "No pip wheels found — attempting online install"
-  "${VENV}/bin/pip" install -q -r "${SHERLOCK_DIR}/requirements.txt" >> "${LOG}" 2>&1
+  warn "No pip wheels found — installing online..."
+  "${VENV}/bin/pip" install --upgrade pip --quiet >> "${LOG}" 2>&1 || true
+  "${VENV}/bin/pip" install -q -r "${SHERLOCK_DIR}/requirements.txt" >> "${LOG}" 2>&1 \
+    && ok "Python packages installed"
 fi
 
-# ── 8-14: Same as online installer ───────────────────────────────────────────
-# (Directories, sherlock.conf, Docker Compose, systemd, Nginx, Firewall, DB)
-# Source the shared config steps:
+# ── 6. Directories & config ───────────────────────────────────────────────────
+hdr "Step 6: Directories & Configuration"
 
-SHERLOCK_INSTALL="${SHERLOCK_DIR}/deploy/sherlock-install.sh"
-if [[ -f "${SHERLOCK_INSTALL}" ]]; then
-  # Run only the configuration/setup steps (skip download steps)
-  export SKIP_DOWNLOADS=1
-  bash "${SHERLOCK_INSTALL}" --configure-only
-else
-  warn "sherlock-install.sh not found — running inline config"
-  # Inline fallback: create directories and config
-  for dir in "${SHERLOCK_DIR}/data" "${SHERLOCK_DIR}/logs" \
-              "${SHERLOCK_DIR}/uploads" "${SHERLOCK_DIR}/outputs" \
-              "${SHERLOCK_DIR}/models/whisper" "${SHERLOCK_DIR}/SampleData"; do
-    mkdir -p "${dir}"
-  done
+for dir in uploads chroma logs outputs data models/whisper SampleData; do
+  mkdir -p "${SHERLOCK_DIR}/${dir}"
+done
+ok "Directories created"
 
-  CONF="${SHERLOCK_DIR}/sherlock.conf"
-  if [[ ! -f "${CONF}" ]]; then
-    JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-    cat > "${CONF}" << CONFEOF
+CONF="${SHERLOCK_DIR}/sherlock.conf"
+if [[ ! -f "${CONF}" ]]; then
+  JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+  cat > "${CONF}" << CONFEOF
 OLLAMA_URL=http://localhost:11434
-CHROMA_URL=http://localhost:8000
+CHROMA_PATH=${SHERLOCK_DIR}/chroma
 DB_PATH=${SHERLOCK_DIR}/data/sherlock.db
 OUTPUTS_DIR=${SHERLOCK_DIR}/outputs
 UPLOADS_DIR=${SHERLOCK_DIR}/uploads
@@ -312,16 +228,65 @@ SYSTEM_NAME=Sherlock
 NAS_PATHS=
 OUTPUT_MIRROR_PATHS=
 CONFEOF
-    ok "sherlock.conf created"
-  fi
+  ok "sherlock.conf created"
+else
+  ok "sherlock.conf already exists (preserved)"
 fi
 
+# ── 7. Sherlock systemd service ───────────────────────────────────────────────
+hdr "Step 7: Sherlock Web Service"
+
+sudo tee /etc/systemd/system/sherlock.service > /dev/null << SHERLOCKESC
+[Unit]
+Description=Sherlock AI Web Server
+After=network-online.target ollama.service
+Wants=ollama.service
+
+[Service]
+User=${USER}
+Group=${USER}
+WorkingDirectory=${SHERLOCK_DIR}
+ExecStart=${VENV}/bin/uvicorn web.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+Environment="PATH=${VENV}/bin:/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=multi-user.target
+SHERLOCKESC
+
+sudo systemctl daemon-reload
+sudo systemctl enable sherlock >> "${LOG}" 2>&1
+sudo systemctl start sherlock  >> "${LOG}" 2>&1
+sleep 3
+
+if sudo systemctl is-active --quiet sherlock; then
+  ok "Sherlock web server running"
+else
+  warn "Sherlock service failed to start — check: sudo journalctl -u sherlock -n 50"
+fi
+
+# ── 8. Firewall ───────────────────────────────────────────────────────────────
+hdr "Step 8: Firewall"
+sudo ufw allow ssh    >> "${LOG}" 2>&1 || true
+sudo ufw allow 8000   >> "${LOG}" 2>&1 || true
+sudo ufw --force enable >> "${LOG}" 2>&1 || true
+ok "Firewall configured (SSH + port 8000)"
+
+# ── Done ──────────────────────────────────────────────────────────────────────
 IP=$(hostname -I | awk '{print $1}')
 echo ""
-echo -e "${BOLD}${GREEN}╔══════════════════════════════════════════════════╗"
-echo -e "║       SHERLOCK OFFLINE INSTALL COMPLETE!         ║"
-echo -e "╚══════════════════════════════════════════════════╝${RESET}"
+echo -e "${BOLD}${GREEN}╔══════════════════════════════════════════════╗"
+echo -e "║     SHERLOCK AI — Install Complete!          ║"
+echo -e "╚══════════════════════════════════════════════╝${RESET}"
 echo ""
-echo -e "  Access at: ${BOLD}https://${IP}${RESET}"
-echo -e "  Log: ${LOG}"
+echo -e "  ${BOLD}Open Sherlock:${RESET}  http://${IP}:8000"
+echo -e "  ${BOLD}Log file:${RESET}       ${LOG}"
+echo ""
+echo -e "  ${YELLOW}First time: create your admin account at the URL above.${RESET}"
+echo ""
+echo -e "  To manage the service:"
+echo -e "    sudo systemctl status sherlock"
+echo -e "    sudo systemctl restart sherlock"
+echo -e "    sudo journalctl -u sherlock -f"
 echo ""

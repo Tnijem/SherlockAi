@@ -248,7 +248,7 @@ cat > "${PLIST_PATH}" << EOF
     <string>${VENV}/bin/python</string>
     <string>-m</string>
     <string>uvicorn</string>
-    <string>web.main:app</string>
+    <string>main:app</string>
     <string>--host</string>
     <string>0.0.0.0</string>
     <string>--port</string>
@@ -256,7 +256,7 @@ cat > "${PLIST_PATH}" << EOF
   </array>
 
   <key>WorkingDirectory</key>
-  <string>${SHERLOCK_DIR}</string>
+  <string>${SHERLOCK_DIR}/web</string>
 
   <key>EnvironmentVariables</key>
   <dict>
