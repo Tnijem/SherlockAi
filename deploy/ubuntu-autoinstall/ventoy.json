@@ -1,0 +1,20 @@
+{
+  "control": [
+    {
+      "theme_esc": "2",
+      "hotkey_tip": "Press E to edit, C to cmdline"
+    }
+  ],
+  "auto_install": [
+    {
+      "image": "/ubuntu-22.04.4-live-server-amd64.iso",
+      "template": "/ubuntu-autoinstall/user-data",
+      "cmd": "autoinstall"
+    },
+    {
+      "image": "/ubuntu-24.04-live-server-amd64.iso",
+      "template": "/ubuntu-autoinstall/user-data",
+      "cmd": "autoinstall"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+#cloud-config
+# ──────────────────────────────────────────────────────────────────────────────
+# Sherlock — Ubuntu 22.04 / 24.04 Autoinstall
+# Place this file at: /Ventoy/ubuntu-autoinstall/user-data  (on Ventoy USB)
+# Pair with an empty   /Ventoy/ubuntu-autoinstall/meta-data
+#
+# How Ventoy uses this:
+#   1. Add Ubuntu 22.04 or 24.04 LTS server ISO to your Ventoy USB root
+#   2. Create /Ventoy/ventoy/ventoy.json pointing to this user-data
+#      (see ventoy.json in this folder)
+#   3. Boot the target machine from the Ventoy USB
+#   4. Select the Ubuntu ISO — it will install silently with these settings
+#   5. Machine reboots into a ready Ubuntu install; run setup-linux.sh next
+# ──────────────────────────────────────────────────────────────────────────────
+
+autoinstall:
+  version: 1
+
+  # ── Locale & keyboard ──────────────────────────────────────────────────────
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  # ── Network (DHCP on first ethernet) ──────────────────────────────────────
+  network:
+    version: 2
+    ethernets:
+      any:
+        match:
+          name: "en*"
+        dhcp4: true
+        dhcp6: false
+
+  # ── Storage (entire disk, LVM, ext4) ──────────────────────────────────────
+  storage:
+    layout:
+      name: lvm
+      match:
+        size: largest
+
+  # ── Identity ───────────────────────────────────────────────────────────────
+  # Change username/password/hostname before deploying
+  identity:
+    hostname: sherlock
+    username: sherlock
+    # Password: "sherlock" — CHANGE THIS after first login
+    # Generate your own with: python3 -c "import crypt; print(crypt.crypt('yourpassword', crypt.METHOD_SHA512))"
+    password: "$6$rounds=4096$saltsaltsalt$BHSm8/Yw5s.7jhMk/JCxWLpGAeEqBM3iFw2U4OUEYGVLtB7s.qbHq7bfekSUdT7I.aH7Q3Ot/5w.D7SLXS5d/"
+    realname: "Sherlock Admin"
+
+  # ── SSH ─────────────────────────────────────────────────────────────────────
+  ssh:
+    install-server: true
+    allow-pw: true
+
+  # ── Packages installed during OS setup ─────────────────────────────────────
+  packages:
+    - curl
+    - wget
+    - git
+    - python3
+    - python3-pip
+    - python3-venv
+    - python3-dev
+    - build-essential
+    - libssl-dev
+    - libffi-dev
+    - ffmpeg
+    - tesseract-ocr
+    - libreoffice
+    - unzip
+    - ca-certificates
+    - gnupg
+    - lsb-release
+
+  # ── Post-install commands ──────────────────────────────────────────────────
+  late-commands:
+    # Install Docker (official repo)
+    - curtin in-target -- bash -c "install -m 0755 -d /etc/apt/keyrings"
+    - curtin in-target -- bash -c "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
+    - curtin in-target -- bash -c "chmod a+r /etc/apt/keyrings/docker.gpg"
+    - curtin in-target -- bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list'
+    - curtin in-target -- apt-get update -qq
+    - curtin in-target -- apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    # Add sherlock user to docker group (no sudo needed for docker)
+    - curtin in-target -- usermod -aG docker sherlock
+    # Enable Docker on boot
+    - curtin in-target -- systemctl enable docker
+    # Copy Sherlock source from USB (if present at /cdrom/ mount point)
+    - |
+      if [ -f /cdrom/sherlock-source.tar.gz ]; then
+        mkdir -p /target/home/sherlock
+        tar -xzf /cdrom/sherlock-source.tar.gz -C /target/home/sherlock/
+        chown -R 1000:1000 /target/home/sherlock/Sherlock
+      fi
+    # Auto-start Sherlock setup hint on first login
+    - |
+      cat >> /target/home/sherlock/.bashrc << 'BASHEOF'
+
+      # ── Sherlock first-run hint ──
+      if [ ! -f ~/.sherlock_setup_done ] && [ -d ~/Sherlock ]; then
+        echo ""
+        echo "  ╔═══════════════════════════════════════╗"
+        echo "  ║   Sherlock is ready to install.       ║"
+        echo "  ║   Run:  cd ~/Sherlock && ./setup.sh   ║"
+        echo "  ╚═══════════════════════════════════════╝"
+        echo ""
+      fi
+      BASHEOF
+
+  # ── Disable automatic updates (stability for production) ──────────────────
+  updates: security
+
+  # ── Confirm before wiping (set to 'disabled' for fully silent install) ─────
+  # WARNING: 'disabled' will wipe the disk without ANY confirmation prompt.
+  # Use 'enabled' during testing; 'disabled' only on dedicated hardware.
+  confirm-selections: enabled
