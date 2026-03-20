@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sherlock — Installation Guide</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181c26;
+    --surface2: #1e2333;
+    --border: #2a2f42;
+    --gold: #c9a84c;
+    --gold-dim: #9a7d38;
+    --gold-glow: rgba(201,168,76,0.15);
+    --text: #e8e6e0;
+    --text-dim: #8a8898;
+    --green: #4caf82;
+    --red: #e05555;
+    --blue: #5b8dee;
+    --font: 'Georgia', serif;
+    --mono: 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.7;
+    padding: 0;
+  }
+
+  /* ── Cover ── */
+  .cover {
+    background: linear-gradient(160deg, #0d1020 0%, #141828 60%, #0f1117 100%);
+    border-bottom: 1px solid var(--gold);
+    padding: 60px 48px 48px;
+    display: flex;
+    align-items: center;
+    gap: 40px;
+    page-break-after: always;
+  }
+  .cover-logo {
+    font-size: 56px;
+    line-height: 1;
+    color: var(--gold);
+    font-family: var(--mono);
+    letter-spacing: -2px;
+    text-shadow: 0 0 30px rgba(201,168,76,0.4);
+    flex-shrink: 0;
+  }
+  .cover-text h1 {
+    font-size: 36px;
+    color: var(--gold);
+    font-weight: normal;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+  .cover-text p {
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+  .cover-meta {
+    margin-top: 20px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .cover-badge {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+  .cover-badge span { color: var(--gold); }
+
+  /* ── Layout ── */
+  .container {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 40px 48px 80px;
+  }
+
+  /* ── TOC ── */
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--gold);
+    border-radius: 6px;
+    padding: 28px 32px;
+    margin-bottom: 48px;
+  }
+  .toc h2 {
+    font-size: 13px;
+    color: var(--gold-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    font-family: var(--mono);
+    font-weight: normal;
+  }
+  .toc ol {
+    padding-left: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 32px;
+  }
+  .toc li { color: var(--text-dim); font-size: 13px; }
+  .toc a { color: var(--text-dim); text-decoration: none; }
+  .toc a:hover { color: var(--gold); }
+
+  /* ── Hardware Picker ── */
+  .hw-picker {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px 28px;
+    margin-bottom: 40px;
+  }
+  .hw-picker h3 {
+    font-size: 13px;
+    color: var(--gold-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-family: var(--mono);
+    font-weight: normal;
+    margin-bottom: 16px;
+  }
+  .hw-picker p {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .hw-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .hw-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.2s, background 0.2s;
+    color: var(--text);
+    font-family: var(--font);
+  }
+  .hw-btn:hover { border-color: var(--gold-dim); }
+  .hw-btn.active { border-color: var(--gold); background: var(--gold-glow); }
+  .hw-btn .hw-label {
+    display: block;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+  .hw-btn .hw-ram {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    margin-bottom: 4px;
+  }
+  .hw-btn .hw-model {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .hw-btn.active .hw-model { color: var(--gold-dim); }
+
+  /* ── Sections ── */
+  .section {
+    margin-bottom: 52px;
+    scroll-margin-top: 20px;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-num {
+    width: 32px;
+    height: 32px;
+    background: var(--gold);
+    color: #0f1117;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: bold;
+    flex-shrink: 0;
+  }
+  .section-title {
+    font-size: 20px;
+    color: var(--gold);
+    font-weight: normal;
+    letter-spacing: 0.02em;
+  }
+  .section-time {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+
+  /* ── Steps ── */
+  .step {
+    margin-bottom: 20px;
+  }
+  .step-label {
+    font-size: 12px;
+    color: var(--gold-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-family: var(--mono);
+    margin-bottom: 6px;
+  }
+  .step p {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 10px;
+    line-height: 1.6;
+  }
+
+  /* ── Command blocks ── */
+  .cmd-block {
+    position: relative;
+    background: #0a0d14;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--gold-dim);
+    border-radius: 0 4px 4px 0;
+    padding: 14px 52px 14px 18px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: #c8d0e0;
+    margin-bottom: 8px;
+    cursor: default;
+    line-height: 1.5;
+    word-break: break-all;
+  }
+  .cmd-block .prompt {
+    color: var(--gold-dim);
+    user-select: none;
+    margin-right: 6px;
+  }
+  .cmd-block .copy-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .cmd-block .copy-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
+  .cmd-block .copy-btn.copied { border-color: var(--green); color: var(--green); }
+
+  .cmd-block .cmd-text { user-select: all; }
+
+  /* Multi-line command */
+  .cmd-block.multi {
+    padding-right: 18px;
+  }
+  .cmd-block.multi .copy-btn {
+    top: 12px;
+    transform: none;
+  }
+
+  /* ── Notes / Callouts ── */
+  .note {
+    background: rgba(91,141,238,0.08);
+    border: 1px solid rgba(91,141,238,0.25);
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #8eaadf;
+    margin-bottom: 12px;
+    line-height: 1.6;
+  }
+  .note::before { content: 'ℹ  '; }
+
+  .warn {
+    background: rgba(224,85,85,0.08);
+    border: 1px solid rgba(224,85,85,0.25);
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #d48080;
+    margin-bottom: 12px;
+    line-height: 1.6;
+  }
+  .warn::before { content: '⚠  '; }
+
+  .tip {
+    background: rgba(76,175,130,0.08);
+    border: 1px solid rgba(76,175,130,0.25);
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #7dc4a4;
+    margin-bottom: 12px;
+    line-height: 1.6;
+  }
+  .tip::before { content: '✓  '; }
+
+  /* ── Inline code ── */
+  code {
+    background: #0a0d14;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #c8d0e0;
+  }
+
+  /* ── Hardware conditional content ── */
+  [data-hw] { display: none; }
+  body[data-hw="standard"] [data-hw~="standard"] { display: block; }
+  body[data-hw="mid"]      [data-hw~="mid"]      { display: block; }
+  body[data-hw="compact"]  [data-hw~="compact"]  { display: block; }
+  body[data-hw="standard"] [data-hw~="standard"].cmd-block { display: block; }
+  body[data-hw="mid"]      [data-hw~="mid"].cmd-block      { display: block; }
+  body[data-hw="compact"]  [data-hw~="compact"].cmd-block  { display: block; }
+  /* Always show hw-agnostic blocks */
+  [data-hw="any"] { display: block !important; }
+  .cmd-block[data-hw="any"] { display: block !important; }
+
+  /* ── Table ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  th {
+    background: var(--surface2);
+    color: var(--gold-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid var(--border);
+    font-weight: normal;
+  }
+  td {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: var(--surface); }
+
+  /* ── Checklist ── */
+  .checklist { list-style: none; padding: 0; }
+  .checklist li {
+    padding: 6px 0 6px 28px;
+    position: relative;
+    font-size: 13px;
+    color: var(--text-dim);
+    border-bottom: 1px solid rgba(42,47,66,0.5);
+  }
+  .checklist li::before {
+    content: '☐';
+    position: absolute;
+    left: 4px;
+    color: var(--border);
+    font-size: 14px;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  @media print {
+    .copy-btn { display: none !important; }
+    .hw-picker { display: none; }
+    body { background: white; color: black; }
+    .cmd-block { background: #f5f5f5; color: #333; border-color: #ccc; }
+  }
+</style>
+</head>
+<body data-hw="standard">
+
+<!-- ══════════ COVER ══════════ -->
+<div class="cover">
+  <div class="cover-logo">🔍</div>
+  <div class="cover-text">
+    <h1>Sherlock Installation Guide</h1>
+    <p>Legal Intelligence. Local. Air-gapped. Private.</p>
+    <div class="cover-meta">
+      <div class="cover-badge">Version <span id="ver">1.0.3</span></div>
+      <div class="cover-badge">macOS <span>13+ Ventura</span></div>
+      <div class="cover-badge">Intel NUC / Mac mini</div>
+      <div class="cover-badge">Ventoy USB</div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ══════════ TOC ══════════ -->
+  <div class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#s1">Before You Begin</a></li>
+      <li><a href="#s2">Install macOS</a></li>
+      <li><a href="#s3">System Setup</a></li>
+      <li><a href="#s4">Install Prerequisites</a></li>
+      <li><a href="#s5">Copy Sherlock from USB</a></li>
+      <li><a href="#s6">Run the Installer</a></li>
+      <li><a href="#s7">First Login</a></li>
+      <li><a href="#s8">Connect to the Firm's Network</a></li>
+      <li><a href="#s9">Verify Everything Works</a></li>
+      <li><a href="#s10">Troubleshooting</a></li>
+    </ol>
+  </div>
+
+  <!-- ══════════ HARDWARE PICKER ══════════ -->
+  <div class="hw-picker">
+    <h3>Select Your Hardware Tier</h3>
+    <p>This adjusts model recommendations throughout the guide for your machine's RAM.</p>
+    <div class="hw-options">
+      <button class="hw-btn active" onclick="setHW('standard')" id="hw-standard">
+        <span class="hw-label">Standard</span>
+        <span class="hw-ram">32 GB RAM or more</span>
+        <span class="hw-model">Model: sherlock-rag (12B)</span>
+      </button>
+      <button class="hw-btn" onclick="setHW('mid')" id="hw-mid">
+        <span class="hw-label">Mid</span>
+        <span class="hw-ram">16 GB RAM</span>
+        <span class="hw-model">Model: mistral:7b</span>
+      </button>
+      <button class="hw-btn" onclick="setHW('compact')" id="hw-compact">
+        <span class="hw-label">Compact</span>
+        <span class="hw-ram">8 GB RAM</span>
+        <span class="hw-model">Model: llama3.2:3b</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════ SECTION 1: Before You Begin ══════════ -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <div class="section-title">Before You Begin</div>
+      <div class="section-time">5 min</div>
+    </div>
+
+    <p style="color:var(--text-dim); margin-bottom:20px;">Confirm you have everything before starting.</p>
+
+    <table>
+      <tr><th>Item</th><th>Details</th><th>Required</th></tr>
+      <tr><td>Ventoy USB Drive</td><td>Contains <code>sherlock-source.tar.gz</code> in root</td><td>✓ Yes</td></tr>
+      <tr><td>Mac mini or Intel NUC</td><td>macOS 13 Ventura or later</td><td>✓ Yes</td></tr>
+      <tr><td>Internet connection</td><td>For macOS install, Homebrew, Docker, and AI models</td><td>✓ First install only</td></tr>
+      <tr><td>Monitor, keyboard, mouse</td><td>Needed during setup — not after</td><td>✓ During setup</td></tr>
+      <tr><td>Ethernet cable</td><td>More reliable than Wi-Fi for large downloads</td><td>Recommended</td></tr>
+      <tr><td>Admin password</td><td>You'll create this for the local macOS account</td><td>✓ Yes</td></tr>
+    </table>
+
+    <div class="note">
+      Total install time is approximately 45–90 minutes, mostly waiting for AI models to download.
+      Once installed, Sherlock runs fully offline — no internet needed.
+    </div>
+  </div>
+
+  <!-- ══════════ SECTION 2: Install macOS ══════════ -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <div class="section-title">Install macOS</div>
+      <div class="section-time">20–40 min</div>
+    </div>
+
+    <div class="note">
+      Skip this section if macOS is already installed and you're setting up a machine that's ready to use.
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 2.1 — Boot into macOS Recovery</div>
+      <p>Power on the Mac. Immediately hold <strong style="color:var(--gold)">⌘ Command + R</strong> until the Apple logo appears.
+      This boots into macOS Recovery mode.</p>
+      <p>For Apple Silicon Macs: hold the <strong style="color:var(--gold)">Power button</strong> until "Loading startup options" appears, then click Options.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 2.2 — Erase the Disk (Fresh Install Only)</div>
+      <p>In Recovery, open <strong>Disk Utility</strong>. Select the internal disk (usually "Macintosh HD"), click <strong>Erase</strong>, and format as APFS. Close Disk Utility.</p>
+      <div class="warn">
+        This permanently erases everything on the drive. Only do this on a new or repurposed machine.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 2.3 — Reinstall macOS</div>
+      <p>Back in Recovery, choose <strong>Reinstall macOS</strong> and follow the prompts. The machine needs internet for this step — connect ethernet or select Wi-Fi when prompted.</p>
+      <p>When the installer asks you to select a disk, choose "Macintosh HD".</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 2.4 — Initial macOS Setup</div>
+      <p>After install, the Mac will restart and show the Setup Assistant.</p>
+      <ul style="color:var(--text-dim); font-size:13px; padding-left:20px; margin-top:8px; line-height:2;">
+        <li>Country / Language: select appropriately</li>
+        <li>Wi-Fi: connect or skip (use ethernet)</li>
+        <li>Apple ID: <strong>Skip</strong> — click "Set Up Later" (not required for Sherlock)</li>
+        <li>Account name: use something like <code>sherlock</code> or the firm name</li>
+        <li>Password: pick a strong local password and record it</li>
+        <li>Analytics / Siri: turn off both</li>
+        <li>Screen Time: skip</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ══════════ SECTION 3: System Setup ══════════ -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <div class="section-title">System Setup</div>
+      <div class="section-time">5 min</div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 3.1 — Open Terminal</div>
+      <p>Press <strong style="color:var(--gold)">⌘ Space</strong>, type <code>Terminal</code>, press Enter.</p>
+      <p>Keep this window open for the rest of the install.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 3.2 — Disable Sleep</div>
+      <p>Prevents the machine from going to sleep during long downloads.</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">sudo systemsetup -setcomputersleep Never</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 3.3 — Set Computer Name</div>
+      <p>Replace <code>SherlocK-FirmName</code> with the law firm's name. No spaces.</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">sudo scutil --set ComputerName "Sherlock-FirmName"</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">sudo scutil --set LocalHostName "Sherlock-FirmName"</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 3.4 — Install Xcode Command Line Tools</div>
+      <p>Required for Homebrew and Python. This will show a dialog — click <strong>Install</strong>.</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">xcode-select --install</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <div class="tip">Wait for the install to complete before continuing (2–5 min).</div>
+    </div>
+  </div>
+
+  <!-- ══════════ SECTION 4: Install Prerequisites ══════════ -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <div class="section-title">Install Prerequisites</div>
+      <div class="section-time">10–20 min</div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 4.1 — Install Homebrew</div>
+      <p>Homebrew is macOS's package manager. Paste this into Terminal:</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <p>When it finishes, it will print two commands to add Homebrew to your PATH. Run them — they look like:</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile && eval "$(/opt/homebrew/bin/brew shellenv)"</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 4.2 — Install Python 3</div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">brew install python@3.11</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 4.3 — Install Docker Desktop</div>
+      <p>Docker runs the Ollama AI engine and ChromaDB database in containers.</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">brew install --cask docker</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <p>After it installs, open Docker Desktop from your Applications folder and complete its one-time setup. Wait until the Docker icon in the menu bar shows "Docker Desktop is running".</p>
+      <div class="warn">
+        Docker must be running before you run the Sherlock installer. Check the menu bar icon.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 4.4 — Install Optional Tools (Recommended)</div>
+      <p>Enables OCR on image scans and support for legacy Word/Excel files:</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">brew install tesseract && brew install --cask libreoffice</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ SECTION 5: Copy Sherlock from USB ══════════ -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <div class="section-title">Copy Sherlock from USB</div>
+      <div class="section-time">2–5 min</div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 5.1 — Plug in the Ventoy USB Drive</div>
+      <p>Insert the USB. It will appear in Finder as <strong>Ventoy</strong> or a similar name. If macOS asks what to do with it, click Ignore.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 5.2 — Find the USB mount point</div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">ls /Volumes/</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <p>Look for a volume named <code>Ventoy</code> or <code>SHERLOCK</code> in the output.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 5.3 — Extract Sherlock</div>
+      <p>Replace <code>Ventoy</code> below if your USB has a different name:</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">cp /Volumes/Ventoy/sherlock-source.tar.gz ~/sherlock-source.tar.gz</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">cd ~ && tar -xzf sherlock-source.tar.gz</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">ls ~/Sherlock/</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <div class="tip">You should see folders like <code>web/</code>, <code>scripts/</code>, and files like <code>setup.sh</code> and <code>docker-compose.yaml</code>.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 5.4 — Eject the USB</div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">diskutil eject /Volumes/Ventoy</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ SECTION 6: Run the Installer ══════════ -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <div class="section-title">Run the Installer</div>
+      <div class="section-time">20–45 min</div>
+    </div>
+
+    <div class="note">
+      The installer is interactive — it will ask a few questions, then do the rest automatically.
+      The longest step is downloading AI models (~4–8 GB total).
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 6.1 — Navigate to Sherlock</div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">cd ~/Sherlock</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 6.2 — Make the installer executable</div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">chmod +x setup.sh</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 6.3 — Run the installer</div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">./setup.sh</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 6.4 — Answer the Setup Questions</div>
+      <p>The installer will prompt you for a few settings:</p>
+      <table>
+        <tr><th>Question</th><th>What to Enter</th></tr>
+        <tr><td>System name</td><td>Firm's name, e.g. <code>Smith &amp; Associates</code></td></tr>
+        <tr><td>NAS path(s)</td><td>Leave blank for now — configure later if they have a NAS</td></tr>
+        <tr><td>Outputs directory</td><td>Press Enter to accept default</td></tr>
+        <tr><td>Uploads directory</td><td>Press Enter to accept default</td></tr>
+        <tr><td>Ollama URL</td><td>Press Enter to accept default (<code>http://localhost:11434</code>)</td></tr>
+        <tr><td>JWT expiry hours</td><td>Press Enter for default (8 hours)</td></tr>
+        <tr><td>Whisper model</td><td>See below ↓</td></tr>
+      </table>
+
+      <!-- HARDWARE-CONDITIONAL: Whisper model recommendations -->
+      <div data-hw="standard" class="tip" style="margin-top:8px;">
+        <strong>Whisper model (Standard / 32GB):</strong> enter <code>medium</code> for best accuracy.
+      </div>
+      <div data-hw="mid" class="tip" style="margin-top:8px;">
+        <strong>Whisper model (Mid / 16GB):</strong> enter <code>small</code> — good balance of speed and accuracy.
+      </div>
+      <div data-hw="compact" class="tip" style="margin-top:8px;">
+        <strong>Whisper model (Compact / 8GB):</strong> enter <code>base</code> — keeps memory usage low.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 6.5 — Set the AI Model for Your Hardware</div>
+      <p>After the installer finishes, set the LLM model size appropriate for this machine:</p>
+
+      <div data-hw="standard">
+        <p style="color:var(--text-dim);font-size:13px;">Standard (32GB) — uses the full Sherlock RAG model:</p>
+        <div class="cmd-block" data-hw="standard">
+          <span class="prompt">$</span><span class="cmd-text">docker exec sherlock-ollama ollama pull mxbai-embed-large</span>
+          <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+        </div>
+      </div>
+
+      <div data-hw="mid">
+        <p style="color:var(--text-dim);font-size:13px;">Mid (16GB) — uses mistral 7B, excellent quality at half the memory:</p>
+        <div class="cmd-block" data-hw="mid">
+          <span class="prompt">$</span><span class="cmd-text">docker exec sherlock-ollama ollama pull mistral:7b</span>
+          <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+        </div>
+        <div class="cmd-block" data-hw="mid">
+          <span class="prompt">$</span><span class="cmd-text">docker exec sherlock-ollama ollama pull mxbai-embed-large</span>
+          <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+        </div>
+        <div class="cmd-block" data-hw="mid">
+          <span class="prompt">$</span><span class="cmd-text">sed -i '' 's/LLM_MODEL=.*/LLM_MODEL=mistral:7b/' ~/Sherlock/sherlock.conf</span>
+          <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+        </div>
+      </div>
+
+      <div data-hw="compact">
+        <p style="color:var(--text-dim);font-size:13px;">Compact (8GB) — uses llama3.2 3B, lightweight and fast:</p>
+        <div class="cmd-block" data-hw="compact">
+          <span class="prompt">$</span><span class="cmd-text">docker exec sherlock-ollama ollama pull llama3.2:3b</span>
+          <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+        </div>
+        <div class="cmd-block" data-hw="compact">
+          <span class="prompt">$</span><span class="cmd-text">docker exec sherlock-ollama ollama pull mxbai-embed-large</span>
+          <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+        </div>
+        <div class="cmd-block" data-hw="compact">
+          <span class="prompt">$</span><span class="cmd-text">sed -i '' 's/LLM_MODEL=.*/LLM_MODEL=llama3.2:3b/' ~/Sherlock/sherlock.conf</span>
+          <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+        </div>
+        <div class="note">On 8GB machines, close all other apps while Sherlock is running to free up memory.</div>
+      </div>
+
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 6.6 — Create the Admin Account</div>
+      <p>The installer will prompt you to create the first admin login. Enter a username and password for the firm's administrator — write these down.</p>
+    </div>
+  </div>
+
+  <!-- ══════════ SECTION 7: First Login ══════════ -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <div class="section-title">First Login</div>
+      <div class="section-time">5 min</div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 7.1 — Open Sherlock in the Browser</div>
+      <p>Open Safari or Chrome and navigate to:</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">↗</span><span class="cmd-text">http://localhost:3000</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 7.2 — Log In</div>
+      <p>Use the admin username and password you just created. You should see the Sherlock dashboard.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 7.3 — Create User Accounts</div>
+      <p>Go to <strong>Admin → Users</strong> and create accounts for each attorney or staff member who will use Sherlock.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 7.4 — Bookmark it</div>
+      <p>Drag the URL to the bookmarks bar or set it as the browser homepage for easy access.</p>
+      <div class="tip">Sherlock starts automatically when the computer turns on — users just open the browser and go to <code>localhost:3000</code>.</div>
+    </div>
+  </div>
+
+  <!-- ══════════ SECTION 8: Network ══════════ -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <div class="section-title">Connect to the Firm's Network</div>
+      <div class="section-time">10–20 min</div>
+    </div>
+
+    <div class="note">
+      This section lets other computers on the office network access Sherlock without being at the Sherlock machine.
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 8.1 — Find the Sherlock Machine's IP Address</div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">ipconfig getifaddr en0</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <p style="color:var(--text-dim);font-size:13px;">This will print something like <code>192.168.1.42</code>. Write this down.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 8.2 — Set a Static IP (Recommended)</div>
+      <p>Log into the office router and assign the Sherlock machine a permanent IP address (DHCP reservation). This prevents the address from changing.</p>
+      <p style="color:var(--text-dim);font-size:13px;">The router's admin page is usually at <code>192.168.1.1</code> or <code>192.168.0.1</code>. Look for "DHCP Reservation" or "Static Lease" settings. Use the MAC address printed when you run:</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">ifconfig en0 | grep ether</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 8.3 — Access from Other Office Computers</div>
+      <p>On any computer in the office, open a browser and go to:</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">↗</span><span class="cmd-text">http://192.168.1.42:3000</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <p style="color:var(--text-dim);font-size:13px;">(Replace <code>192.168.1.42</code> with the actual IP from Step 8.1)</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 8.4 — Connect NAS Shared Drives (If Applicable)</div>
+      <p>If the firm has a NAS (network storage), mount it on the Sherlock machine so it can index those files. In Finder, press <strong style="color:var(--gold)">⌘K</strong> and enter the NAS address (e.g. <code>smb://192.168.1.10/LegalFiles</code>).</p>
+      <p style="color:var(--text-dim);font-size:13px;">After mounting, note the path it appears at and add it to Sherlock:</p>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">ls /Volumes/</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <p style="color:var(--text-dim);font-size:13px;">Then in the Sherlock Admin panel → Settings → add the NAS path (e.g. <code>/Volumes/LegalFiles</code>).</p>
+    </div>
+  </div>
+
+  <!-- ══════════ SECTION 9: Verify ══════════ -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <div class="section-title">Verify Everything Works</div>
+      <div class="section-time">5 min</div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 9.1 — Run the Status Check</div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">cd ~/Sherlock && ./setup.sh --status</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+      <p style="color:var(--text-dim);font-size:13px;">All items should show ✓. If any show ✗, see Section 10.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 9.2 — Test a Search</div>
+      <p>Log into Sherlock, upload a sample PDF (any legal document), and ask it a question about the document. If you get a response, everything is working.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Step 9.3 — Final Checklist</div>
+      <ul class="checklist">
+        <li>./setup.sh --status shows all ✓</li>
+        <li>Browser opens http://localhost:3000</li>
+        <li>Admin can log in</li>
+        <li>Test document uploaded and searchable</li>
+        <li>Other office computers can reach Sherlock at its IP:3000</li>
+        <li>Admin account password recorded and stored securely</li>
+        <li>NAS path configured (if applicable)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ══════════ SECTION 10: Troubleshooting ══════════ -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <div class="section-title">Troubleshooting</div>
+    </div>
+
+    <table>
+      <tr><th>Problem</th><th>Fix</th></tr>
+      <tr>
+        <td>"Docker not found"</td>
+        <td>Open Docker Desktop from Applications and wait for the menu bar icon to say "running", then re-run <code>./setup.sh</code></td>
+      </tr>
+      <tr>
+        <td>Sherlock web not responding</td>
+        <td>Run: <code>tail -f ~/Sherlock/logs/sherlock-web.log</code> and look for errors</td>
+      </tr>
+      <tr>
+        <td>Ollama not responding</td>
+        <td>Run: <code>docker ps</code> — if <code>sherlock-ollama</code> is missing, run <code>cd ~/Sherlock && docker compose up -d</code></td>
+      </tr>
+      <tr>
+        <td>Out of memory / slow responses</td>
+        <td>Switch to a smaller model (see Section 6.5). Close other apps. Restart Sherlock: <code>cd ~/Sherlock && ./restart.sh</code></td>
+      </tr>
+      <tr>
+        <td>Can't reach from other computers</td>
+        <td>Check firewall: System Settings → Network → Firewall → add Sherlock. Verify IP address hasn't changed.</td>
+      </tr>
+      <tr>
+        <td>Models failed to download</td>
+        <td>Ensure internet is connected, then: <code>docker exec sherlock-ollama ollama pull mxbai-embed-large</code></td>
+      </tr>
+      <tr>
+        <td>Forgot admin password</td>
+        <td>Run: <code>cd ~/Sherlock/web && ../venv/bin/python create_admin.py reset</code></td>
+      </tr>
+    </table>
+
+    <div class="step">
+      <div class="step-label">Restart All Services</div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">cd ~/Sherlock && ./restart.sh</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">View Live Logs</div>
+      <div class="cmd-block" data-hw="any">
+        <span class="prompt">$</span><span class="cmd-text">tail -f ~/Sherlock/logs/sherlock-web.log</span>
+        <button class="copy-btn" onclick="copyCmd(this)">copy</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-label">Contact Support</div>
+      <p style="color:var(--text-dim);font-size:13px;">If you're stuck, run the status command and send a screenshot of the output to your Sherlock contact.</p>
+    </div>
+  </div>
+
+  <!-- ══════════ FOOTER ══════════ -->
+  <div class="footer">
+    <span>Sherlock v<span id="ver2">1.0.3</span> — Install Guide</span>
+    <span>Legal Intelligence. Offline. Private.</span>
+  </div>
+
+</div>
+
+<script>
+  // ── Hardware tier switcher ──
+  function setHW(tier) {
+    document.body.setAttribute('data-hw', tier);
+    document.querySelectorAll('.hw-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('hw-' + tier).classList.add('active');
+  }
+
+  // ── Copy to clipboard ──
+  function copyCmd(btn) {
+    const block = btn.closest('.cmd-block');
+    const cmdSpan = block.querySelector('.cmd-text');
+    const text = cmdSpan ? cmdSpan.textContent.trim() : '';
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copied ✓';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'copy';
+        btn.classList.remove('copied');
+      }, 1800);
+    }).catch(() => {
+      // Fallback for non-HTTPS contexts
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(cmdSpan);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand('copy');
+      sel.removeAllRanges();
+      btn.textContent = 'copied ✓';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'copy';
+        btn.classList.remove('copied');
+      }, 1800);
+    });
+  }
+
+  // ── Load version from VERSION file path (served alongside) ──
+  fetch('../VERSION').then(r => r.text()).then(v => {
+    const ver = v.trim();
+    document.getElementById('ver').textContent = ver;
+    document.getElementById('ver2').textContent = ver;
+  }).catch(() => {});
+</script>
+</body>
+</html>
