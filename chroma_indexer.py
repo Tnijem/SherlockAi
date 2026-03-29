@@ -1,4 +1,4 @@
-#!/Users/tommynijem/Sherlock/venv/bin/python
+#!/Users/nijemtech/Sherlock/venv/bin/python
 import os
 import sys
 import chromadb
@@ -15,7 +15,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 OLLAMA_URL = 'http://localhost:11434/api/embeddings'
-EMBED_MODEL = 'mxbai-embed-large'
+EMBED_MODEL = 'nomic-embed-text'
 CHROMA_HOST = 'localhost'
 CHROMA_PORT = 8000
 COLLECTION = 'sherlock_cases'
@@ -66,11 +66,11 @@ for root, dirs, files in os.walk(directory):
                 continue  # Skip other formats
             text = text.strip()
             if text:
-                embedding = get_embedding(text[:4000])
+                embedding = get_embedding(text[:3000])
                 coll.add(
                     ids=[filename],
                     embeddings=[embedding],
-                    documents=[text[:1000]],  # Preview
+                    documents=[text[:500]],  # Preview
                     metadatas=[{'path': filepath, 'length': len(text)}]
                 )
                 print(f"Indexed {filename} ({len(text)} chars)")

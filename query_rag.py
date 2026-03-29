@@ -1,7 +1,7 @@
-#!/Users/tommynijem/Sherlock/venv/bin/python
-\"\"\"Sherlock CLI RAG Query - NAS Cases.
+#!/Users/nijemtech/Sherlock/venv/bin/python
+"""Sherlock CLI RAG Query - NAS Cases.
 Chroma retrieve + sherlock-rag LLM.
-\"\"\"
+"""
 
 import sys
 import chromadb

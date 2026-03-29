@@ -1,6 +1,6 @@
 #!/Users/tommynijem/Sherlock/venv/bin/python
 import os
-sys.path.append('/Users/tommynijem/Library/Python/3.9/lib/python/site-packages')
+#sys.path.append('/Users/tommynijem/Library/Python/3.9/lib/python/site-packages')
 import chromadb
 from pypdf import PdfReader
 from docx import Document
