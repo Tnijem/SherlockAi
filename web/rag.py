@@ -21,6 +21,10 @@ log = get_logger("sherlock.rag")
 
 SEARXNG_URL = "http://localhost:8888"
 
+# Minimum cosine-similarity score for a chunk to be passed to the LLM.
+# Chunks below this are too dissimilar to be useful and increase hallucination risk.
+MIN_SCORE_THRESHOLD = 0.30
+
 # ── ChromaDB client (persistent singleton) ────────────────────────────────────
 
 _chroma: chromadb.HttpClient | None = None
@@ -344,11 +348,26 @@ def searxng_available() -> bool:
 _BASE_SYSTEM = """You are Sherlock, a senior paralegal AI with the instincts of a 20-year litigation veteran. You work from the case documents provided, and when research mode is active, from public web sources as well. You are the attorney's most trusted researcher — precise, thorough, and unfailingly honest about what you do and don't know.
 
 ═══ ABSOLUTE RULES ═══
-1. Work ONLY from the provided context. If a fact isn't in the documents, it doesn't exist.
+1. Work ONLY from the provided context. If a fact isn't in the documents, it does not exist.
 2. If context is insufficient, say exactly what is missing and why it matters to the question.
 3. Never speculate, invent, or fill gaps with general legal knowledge presented as case facts.
 4. Cite every material claim: [filename] or [filename, approximate location/date if visible].
 5. Clearly distinguish document evidence from web sources: use [Doc: filename] vs [Web: url].
+6. Always name judges, parties, attorneys, and all other persons exactly as they appear in the documents.
+
+═══ STRICTLY PROHIBITED ═══
+- Using ANY knowledge from your training data that is not explicitly present in the document context below
+- Inventing or guessing dates, names, dollar amounts, case numbers, rulings, procedural history, or any specific fact
+- Presenting training knowledge as if it were document evidence
+- Filling gaps with "typical" or "standard" legal outcomes as if they were established by the record
+- Answering a specific case question when the documents do not contain the answer
+
+═══ WHEN CONTEXT IS ABSENT OR INSUFFICIENT ═══
+If the document context does not contain the information needed to answer the question, you MUST respond with this exact structure:
+"The indexed documents do not contain [specific information requested].
+I cannot answer this without the source material. [Identify what document type would contain the answer, e.g., 'A deposition transcript', 'The settlement agreement', 'The docket sheet'.]"
+
+Do NOT attempt to answer. Do NOT say "typically" or "generally" or "in most cases." Stop there.
 
 ═══ HOW TO RESPOND ═══
 
@@ -469,11 +488,28 @@ def _build_system_prompt(
 
 # ── Prompt assembly ───────────────────────────────────────────────────────────
 
+_NO_CONTEXT_MSG = (
+    "⚠ **No relevant documents found.**\n\n"
+    "The indexed files do not contain information responsive to this query. "
+    "Sherlock cannot answer without source material — fabricating an answer would be worse than useless in a legal context.\n\n"
+    "**To proceed:** Upload and index the relevant case documents, verify the correct case scope is selected, "
+    "or rephrase the question using terms that appear in the indexed files."
+)
+
+_LOW_CONFIDENCE_WARNING = (
+    "⚠ RETRIEVAL CONFIDENCE WARNING: The document chunks retrieved for this query have low relevance scores. "
+    "The indexed files may not contain a clear answer. "
+    "If you cannot find the specific information asked for within the excerpts below, "
+    "you MUST say so — do not guess or infer from general legal knowledge."
+)
+
+
 def _build_prompt(
     query: str,
     context_chunks: list[dict],
     web_results: list[dict] | None = None,
     history: list[dict] | None = None,
+    top_score: float = 1.0,
 ) -> str:
     sections = []
 
@@ -491,19 +527,34 @@ def _build_prompt(
             history_lines.append(f"{label}: {content}")
         sections.append("[Conversation History]\n" + "\n".join(history_lines))
 
+    # Inject low-confidence warning when retrieval scores are marginal
+    if top_score < 0.50:
+        sections.append(_LOW_CONFIDENCE_WARNING)
+
+    fence = "═" * 60
     doc_text = "\n\n---\n\n".join(
         f"[Doc: {c['source']} | Chunk {c['chunk']} | Relevance: {c['score']}]\n{c['text']}"
         for c in context_chunks
     )
 
-    sections.append(f"Context from case files:\n\n{doc_text}")
+    sections.append(
+        f"{fence}\n"
+        f"DOCUMENT CONTEXT — YOUR ONLY PERMITTED SOURCE OF TRUTH\n"
+        f"Every factual claim in your response MUST be traceable to text in this block.\n"
+        f"If the answer is not explicitly stated below, say so — do not guess.\n"
+        f"{fence}\n\n"
+        f"{doc_text}\n\n"
+        f"{fence}\n"
+        f"END OF DOCUMENT CONTEXT\n"
+        f"{fence}"
+    )
 
     if web_results:
         web_text = "\n\n---\n\n".join(
             f"[Web: {r['url']}]\nTitle: {r['title']}\n{r['snippet']}"
             for r in web_results
         )
-        sections.append(f"Web search results (public record — secondary reference):\n\n{web_text}")
+        sections.append(f"Web search results (public record — secondary reference only):\n\n{web_text}")
 
     sections.append(f"Question: {query}")
     return "\n\n---\n\n".join(sections)
@@ -529,15 +580,34 @@ async def stream_response(
 
     # Retrieve doc chunks
     t_retrieve = time.perf_counter()
-    chunks = retrieve(query, user_id, scope)
+    raw_chunks = retrieve(query, user_id, scope)
     ms_retrieve = _ms(t_retrieve)
+
+    # ── Score threshold: drop chunks too dissimilar to be useful ──────────────
+    chunks = [c for c in raw_chunks if c["score"] >= MIN_SCORE_THRESHOLD]
+    top_score = chunks[0]["score"] if chunks else 0.0
+
+    # ── No-context guard: refuse to call the LLM with no relevant material ────
+    if not chunks and not research_mode:
+        log.warning(
+            "rag_no_context",
+            extra={
+                "user_id": user_id,
+                "query": query[:120],
+                "scope": scope,
+                "raw_chunks": len(raw_chunks),
+                "top_raw_score": raw_chunks[0]["score"] if raw_chunks else 0.0,
+            },
+        )
+        yield (_NO_CONTEXT_MSG, [])
+        return
 
     # Optionally fetch web results
     web_results: list[dict] = []
     if research_mode:
         web_results = search_web(query, n=5)
 
-    prompt = _build_prompt(query, chunks, web_results if research_mode else None, history=history)
+    prompt = _build_prompt(query, chunks, web_results if research_mode else None, history=history, top_score=top_score)
     system_prompt = _build_system_prompt(query_type, verbosity_role, research_mode, case_context=case_context)
 
     sources = [
