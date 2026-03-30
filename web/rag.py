@@ -149,6 +149,27 @@ def start_keepalive() -> None:
 
 # ── BM25 keyword search (FTS5) ────────────────────────────────────────────
 
+def _fts5_query(query: str) -> str:
+    """
+    Convert a raw user query into a safe FTS5 MATCH expression.
+
+    FTS5 treats bare hyphens as NOT, bare colons as column specifiers,
+    and special chars like * " ( ) as operators — all of which cause
+    "no such column" or syntax errors when user input is passed directly.
+
+    Strategy: extract plain words, OR them together so partial matches
+    still rank. Single-word queries are wrapped in quotes to prevent
+    FTS5 interpreting them as column names.
+    """
+    import re
+    # Pull out alphanumeric tokens (ignore punctuation / operators)
+    tokens = re.findall(r"[a-zA-Z0-9']+", query)
+    if not tokens:
+        return '""'   # FTS5 matches nothing for empty query
+    # Wrap each token in double-quotes so FTS5 treats them as literals
+    return " OR ".join(f'"{t}"' for t in tokens)
+
+
 def _bm25_search(query: str, collections: list[str], n: int = 20) -> list[dict]:
     """Keyword search via SQLite FTS5. Returns [{chunk_id, source, text, bm25_score}]."""
     import sqlite3
@@ -157,13 +178,14 @@ def _bm25_search(query: str, collections: list[str], n: int = 20) -> list[dict]:
         conn = sqlite3.connect(str(DB_PATH))
         cur = conn.cursor()
         placeholders = ",".join("?" for _ in collections)
+        fts_query = _fts5_query(query)
         cur.execute(f"""
             SELECT chunk_id, source, content, bm25(chunk_fts) as score
             FROM chunk_fts
             WHERE chunk_fts MATCH ? AND collection IN ({placeholders})
             ORDER BY score
             LIMIT ?
-        """, [query] + collections + [n])
+        """, [fts_query] + collections + [n])
         results = []
         for row in cur.fetchall():
             results.append({
