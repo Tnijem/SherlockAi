@@ -44,6 +44,9 @@ pydantic==2.12.5
 python-dotenv==1.2.2
 aiofiles==25.1.0
 
+# File watcher (auto re-index on NAS changes)
+watchdog>=4.0.0
+
 # Dataset tools (fetch_cold_cases.py — optional, not needed for web server)
 datasets>=4.0.0
 huggingface_hub>=0.20.0

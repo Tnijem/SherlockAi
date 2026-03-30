@@ -251,6 +251,37 @@
             </table>
           </div>
 
+          <div class="admin-section" id="courtlistenerSection">
+            <h3>CourtListener — Download Cases</h3>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-size:11px;color:var(--text-muted)">Court</label>
+                <select id="clCourt" style="font-size:12px;padding:4px 6px;">
+                  <option value="">All Federal</option>
+                </select>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-size:11px;color:var(--text-muted)">Count</label>
+                <input id="clCount" type="number" value="20" min="1" max="200" style="width:70px;font-size:12px;padding:4px 6px;">
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-size:11px;color:var(--text-muted)">Search query (optional)</label>
+                <input id="clQuery" type="text" placeholder="e.g. breach of contract" style="width:200px;font-size:12px;padding:4px 6px;">
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-size:11px;color:var(--text-muted)">After date</label>
+                <input id="clAfter" type="date" style="font-size:12px;padding:4px 6px;">
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-size:11px;color:var(--text-muted)">Before date</label>
+                <input id="clBefore" type="date" style="font-size:12px;padding:4px 6px;">
+              </div>
+              <button class="btn btn-primary-sm" onclick="startCourtListenerDownload()" id="clDownloadBtn">&#8659; Download</button>
+            </div>
+            <div id="clStatus" style="font-size:12px;color:var(--text-muted);min-height:18px;"></div>
+            <div id="clLog" style="font-size:11px;font-family:monospace;max-height:120px;overflow-y:auto;margin-top:6px;background:var(--surface2);border-radius:4px;padding:6px 8px;display:none;"></div>
+          </div>
+
           <div class="admin-section" style="margin-bottom:0">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
               <h3 style="margin:0">Usage Dashboard</h3>

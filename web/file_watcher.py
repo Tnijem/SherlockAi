@@ -111,7 +111,7 @@ class FileWatcher:
                 continue
 
             handler = _DebounceHandler(
-                callback=start_nas_index,
+                callback=lambda: start_nas_index(NAS_PATHS),
                 label=nas.name,
             )
             self._observer.schedule(handler, str(nas), recursive=True)

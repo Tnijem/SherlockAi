@@ -1625,6 +1625,8 @@ async function loadAdmin() {
   loadUsage(7);
   resumeActiveReindex();
   checkForUpdate(true); // silent background check on load
+  loadCourtListenerCourts();
+  pollCourtListenerStatus(); // resume if a download was already running
 }
 
 // ── Update / Upgrade ──────────────────────────────────────────────────────────
@@ -1867,6 +1869,87 @@ function pollReindex(jobId, btn, resetLabel) {
       btn.textContent = resetLabel;
     }
   }, 3000);
+}
+
+// ── CourtListener ─────────────────────────────────────────────────────────────
+
+let _clPollInterval = null;
+
+async function loadCourtListenerCourts() {
+  try {
+    const courts = await api('GET', '/api/admin/courtlistener/courts');
+    const sel = document.getElementById('clCourt');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">All Federal</option>';
+    for (const [label, slug] of Object.entries(courts)) {
+      if (!slug) continue;
+      const opt = document.createElement('option');
+      opt.value = slug;
+      opt.textContent = label;
+      sel.appendChild(opt);
+    }
+  } catch { /* non-fatal */ }
+}
+
+async function startCourtListenerDownload() {
+  const btn    = document.getElementById('clDownloadBtn');
+  const count  = parseInt(document.getElementById('clCount').value) || 20;
+  const query  = document.getElementById('clQuery').value.trim();
+  const court  = document.getElementById('clCourt').value || null;
+  const after  = document.getElementById('clAfter').value || null;
+  const before = document.getElementById('clBefore').value || null;
+
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+  try {
+    await api('POST', '/api/admin/courtlistener/download', {
+      count, query, court, after_date: after, before_date: before, trigger_index: true,
+    });
+    toast(`CourtListener download started (${count} cases).`);
+    pollCourtListenerStatus();
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '⬇ Download';
+    toast('Download failed: ' + e.message, 'error');
+  }
+}
+
+async function pollCourtListenerStatus() {
+  if (_clPollInterval) return; // already polling
+  _clPollInterval = setInterval(async () => {
+    try {
+      const s   = await api('GET', '/api/admin/courtlistener/status');
+      const btn = document.getElementById('clDownloadBtn');
+      const div = document.getElementById('clStatus');
+      const log = document.getElementById('clLog');
+      if (!div) { clearInterval(_clPollInterval); _clPollInterval = null; return; }
+
+      if (s.running) {
+        if (btn) { btn.disabled = true; btn.textContent = `Downloading… (${s.downloaded}/${s.total})`; }
+        div.textContent = `Downloading: ${s.downloaded} saved, ${s.skipped} skipped, ${s.failed} failed`;
+        if (log && s.messages?.length) {
+          log.style.display = 'block';
+          log.textContent = s.messages.slice(-30).join('\n');
+          log.scrollTop = log.scrollHeight;
+        }
+      } else if (s.done) {
+        clearInterval(_clPollInterval); _clPollInterval = null;
+        if (btn) { btn.disabled = false; btn.textContent = '⬇ Download'; }
+        div.textContent = `Done — ${s.downloaded} downloaded, ${s.skipped} skipped, ${s.failed} failed.`;
+        if (log && s.messages?.length) {
+          log.style.display = 'block';
+          log.textContent = s.messages.join('\n');
+          log.scrollTop = log.scrollHeight;
+        }
+        toast(`CourtListener: ${s.downloaded} cases downloaded.`, 'success');
+        loadSystemStatus();
+      } else {
+        clearInterval(_clPollInterval); _clPollInterval = null;
+      }
+    } catch {
+      clearInterval(_clPollInterval); _clPollInterval = null;
+    }
+  }, 2000);
 }
 
 // ── Document preview ─────────────────────────────────────────────────────────

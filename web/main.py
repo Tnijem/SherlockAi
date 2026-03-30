@@ -37,6 +37,8 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 import auth
 import audio as audio_mod
+import courtlistener as cl_mod
+import file_watcher as watcher_mod
 import indexer as idx
 import outputs as out_mod
 import rag
@@ -141,8 +143,12 @@ async def lifespan(app: FastAPI):
             log_app.warning(f"Embed warmup failed: {e}")
     _threading.Thread(target=_warmup, daemon=True, name="embed-warmup").start()
 
+    # Start file watcher (auto re-index on NAS changes)
+    watcher_mod.start_watcher()
+
     yield
 
+    watcher_mod.stop_watcher()
     log_app.info("Sherlock shutting down", extra={"event": "shutdown"})
 
 
@@ -1807,6 +1813,53 @@ def admin_reindex_full(
           detail=f"Full wipe + reindex triggered ({len(NAS_PATHS)} paths)")
     job_id = idx.start_nas_index(NAS_PATHS)
     return {"job_id": job_id}
+
+
+@app.get("/api/admin/watcher/status")
+def watcher_status(_: User = Depends(auth.require_admin)):
+    return watcher_mod.watcher_status()
+
+
+# ── CourtListener ─────────────────────────────────────────────────────────────
+
+class CourtListenerRequest(BaseModel):
+    count:       int            = 20
+    query:       str            = ""
+    court:       Optional[str]  = None
+    after_date:  Optional[str]  = None
+    before_date: Optional[str]  = None
+    trigger_index: bool         = True
+
+
+@app.post("/api/admin/courtlistener/download")
+def courtlistener_download(
+    req: CourtListenerRequest,
+    admin: User = Depends(auth.require_admin),
+):
+    status = cl_mod.get_download_status()
+    if status.get("running"):
+        raise HTTPException(status_code=409, detail="A download is already running.")
+    audit("courtlistener_download", user_id=admin.id, username=admin.username,
+          detail=f"count={req.count} court={req.court} query={req.query!r}")
+    cl_mod.start_download(
+        count=req.count,
+        query=req.query,
+        court=req.court,
+        after_date=req.after_date,
+        before_date=req.before_date,
+        trigger_index=req.trigger_index,
+    )
+    return {"started": True}
+
+
+@app.get("/api/admin/courtlistener/status")
+def courtlistener_status(_: User = Depends(auth.require_admin)):
+    return cl_mod.get_download_status()
+
+
+@app.get("/api/admin/courtlistener/courts")
+def courtlistener_courts(_: User = Depends(auth.require_admin)):
+    return cl_mod.list_courts()
 
 
 @app.get("/api/indexer/live-status")

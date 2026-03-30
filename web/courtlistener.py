@@ -333,26 +333,23 @@ def start_download(
 
 def _trigger_indexer(save_dir: Path):
     """
-    After download, trigger indexing of the SampleData directory.
-    If it's a configured NAS path, uses start_nas_index().
-    Otherwise falls back to start_case_index() if available.
+    After download, trigger a NAS re-index.
+    Always uses start_nas_index(NAS_PATHS). If save_dir isn't in NAS_PATHS,
+    logs a hint so the admin can add it rather than silently doing nothing.
     """
     from indexer import start_nas_index
     try:
-        save_str = str(save_dir.resolve())
-        nas_strs = [str(Path(p).resolve()) for p in NAS_PATHS]
-        if save_str in nas_strs:
-            start_nas_index()
-            log.info("courtlistener_triggered_nas_index")
-        else:
-            # SampleData not in NAS_PATHS — add it temporarily for indexing
-            # by using the case-index path if available
-            try:
-                from indexer import start_case_index
-                start_case_index()
-                log.info("courtlistener_triggered_case_index")
-            except (ImportError, AttributeError):
-                log.info("courtlistener_index_hint: add %s to NAS_PATHS to auto-index", save_dir)
+        save_str  = str(save_dir.resolve())
+        nas_strs  = [str(Path(p).resolve()) for p in NAS_PATHS]
+        if save_str not in nas_strs:
+            log.warning(
+                "courtlistener_index_hint: %s is not in NAS_PATHS — "
+                "add it in Configuration to auto-index downloaded cases. "
+                "Triggering index of configured NAS paths instead.",
+                save_dir,
+            )
+        start_nas_index(NAS_PATHS)
+        log.info("courtlistener_triggered_nas_index")
     except Exception as exc:
         log.error("courtlistener_trigger_index_error: %s", exc)
 
