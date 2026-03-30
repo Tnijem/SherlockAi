@@ -1,42 +1,55 @@
 """
 Sherlock file indexer — GB-scale, multi-format, hash-deduped, chunked.
 
-Handles:
-  PDF, DOCX, DOC (via LibreOffice), TXT, MD, RTF, HTML, XLSX, XLS, CSV,
-  PPTX, images (OCR), audio (Whisper transcription), EML, MSG
+Pipeline design:
+  Stage 1 — Scanner (main thread): rglob files, mtime/hash check against DB,
+             skip unchanged files before touching them. Generator-based so
+             scanning and extracting overlap.
+  Stage 2 — Extract pool (N threads): text extraction (PDF/DOCX/OCR/etc.)
+             is I/O + CPU bound and fully parallelisable.
+  Stage 3 — Embed + upsert (main thread): chunks batched to Ollama /api/embed
+             (cap 32 per call), normalised, upserted to ChromaDB + FTS5,
+             committed to SQLite. Single writer = no locking headaches.
 
-Design:
-  - Files are split into overlapping ~512-token chunks for better retrieval.
-  - Each file's sha256 hash is stored in SQLite; unchanged files are skipped.
-  - NAS paths are read-only — this module never writes to source dirs.
-  - Runs as a background thread; callers get a job_id to poll status.
-  - Gracefully handles NAS disconnects (logs error, continues with other files).
+Cancellation: any job can be cancelled mid-run. Pending (not-yet-flushed)
+  work is discarded; already-committed work stays. No half-indexed files.
+
+Progress: _update_job writes stage + counts to the shared status file so
+  any consumer (web UI, CLI) sees live granular status.
 """
 
 from __future__ import annotations
 
+import concurrent.futures
 import csv
 import hashlib
-import io
 import json
-import logging
-import os
+import math
+import sqlite3 as _sqlite3
 import subprocess
 import tempfile
 import threading
-import time
 import uuid
+from datetime import datetime as _dt
 from pathlib import Path
-from typing import Callable, Generator, Optional
+from typing import Iterator, Optional
 
 import requests
 from sqlalchemy.orm import Session
 
-from config import EMBED_MODEL, GLOBAL_COLLECTION, OLLAMA_URL, UPLOADS_DIR, user_collection
+from config import DB_PATH, EMBED_MODEL, GLOBAL_COLLECTION, OLLAMA_URL, UPLOADS_DIR, user_collection
 from logging_config import get_logger
 from models import IndexedFile, SessionLocal, Upload
 
 log = get_logger("sherlock.indexer")
+
+# ── Tuning constants ──────────────────────────────────────────────────────────
+
+CHUNK_SIZE        = 1200   # chars per chunk (~300 tokens)
+CHUNK_OVERLAP     = 200    # overlap between adjacent chunks
+EMBED_BATCH_SIZE  = 32     # max chunks per /api/embed call (memory cap for bge-m3)
+FILE_BATCH_SIZE   = 8      # files accumulated before a flush to the store
+N_EXTRACT_WORKERS = 4      # parallel text-extraction threads
 
 # ── Supported extensions ──────────────────────────────────────────────────────
 
@@ -58,20 +71,13 @@ ALL_SUPPORTED = (
 
 # ── Chunking ──────────────────────────────────────────────────────────────────
 
-CHUNK_SIZE    = 1200   # chars (~300 tokens)
-CHUNK_OVERLAP = 200    # chars of overlap between chunks
-
-
 def chunk_text(text: str) -> list[str]:
-    """Split text into overlapping chunks."""
     text = text.strip()
     if not text:
         return []
-    chunks = []
-    start = 0
+    chunks, start = [], 0
     while start < len(text):
-        end = start + CHUNK_SIZE
-        chunks.append(text[start:end])
+        chunks.append(text[start:start + CHUNK_SIZE])
         start += CHUNK_SIZE - CHUNK_OVERLAP
     return [c for c in chunks if c.strip()]
 
@@ -82,43 +88,30 @@ def extract_text(filepath: Path) -> str:
     """Extract plain text from a file. Returns empty string on failure."""
     ext = filepath.suffix.lower()
     try:
-        if ext in TEXT_EXTS:
-            return _extract_text_file(filepath)
-        elif ext in PDF_EXTS:
-            return _extract_pdf(filepath)
-        elif ext == ".docx":
-            return _extract_docx(filepath)
-        elif ext == ".doc":
-            return _extract_doc_via_libreoffice(filepath)
-        elif ext == ".xlsx":
-            return _extract_xlsx(filepath)
-        elif ext == ".xls":
-            return _extract_xls_via_libreoffice(filepath)
-        elif ext in PPT_EXTS:
+        if ext in TEXT_EXTS:    return _extract_text_file(filepath)
+        if ext in PDF_EXTS:     return _extract_pdf(filepath)
+        if ext == ".docx":      return _extract_docx(filepath)
+        if ext == ".doc":       return _extract_via_libreoffice(filepath)
+        if ext == ".xlsx":      return _extract_xlsx(filepath)
+        if ext == ".xls":       return _extract_via_libreoffice(filepath)
+        if ext in PPT_EXTS:
             return _extract_pptx(filepath) if ext == ".pptx" else _extract_via_libreoffice(filepath)
-        elif ext in HTML_EXTS:
-            return _extract_html(filepath)
-        elif ext in RTF_EXTS:
-            return _extract_rtf(filepath)
-        elif ext in IMAGE_EXTS:
-            return _extract_image_ocr(filepath)
-        elif ext in AUDIO_EXTS:
-            return _extract_audio_whisper(filepath)
-        elif ext in EMAIL_EXTS:
-            return _extract_eml(filepath)
+        if ext in HTML_EXTS:    return _extract_html(filepath)
+        if ext in RTF_EXTS:     return _extract_rtf(filepath)
+        if ext in IMAGE_EXTS:   return _extract_image_ocr(filepath)
+        if ext in AUDIO_EXTS:   return _extract_audio_whisper(filepath)
+        if ext in EMAIL_EXTS:   return _extract_eml(filepath)
     except Exception as e:
         log.warning("extract_text failed for %s: %s", filepath, e)
     return ""
 
 
 def _extract_text_file(fp: Path) -> str:
-    # Handle CSV/TSV specially — flatten to readable text
     if fp.suffix.lower() in {".csv", ".tsv"}:
         delim = "\t" if fp.suffix.lower() == ".tsv" else ","
         rows = []
         with fp.open(encoding="utf-8", errors="ignore") as f:
-            reader = csv.reader(f, delimiter=delim)
-            for row in reader:
+            for row in csv.reader(f, delimiter=delim):
                 rows.append(" | ".join(row))
         return "\n".join(rows)
     return fp.read_text(encoding="utf-8", errors="ignore")
@@ -131,11 +124,9 @@ def _extract_pdf(fp: Path) -> str:
     for page in reader.pages:
         text = page.extract_text() or ""
         if not text.strip():
-            # Scanned page — fall back to OCR
             try:
                 from PIL import Image
-                import pytesseract
-                import io as _io
+                import pytesseract, io as _io
                 for img_obj in page.images:
                     img = Image.open(_io.BytesIO(img_obj.data))
                     text += pytesseract.image_to_string(img) + "\n"
@@ -148,23 +139,14 @@ def _extract_pdf(fp: Path) -> str:
 def _extract_docx(fp: Path) -> str:
     from docx import Document
     doc = Document(str(fp))
-    parts = []
-    for para in doc.paragraphs:
-        if para.text.strip():
-            parts.append(para.text)
-    # Also extract table text
+    parts = [p.text for p in doc.paragraphs if p.text.strip()]
     for table in doc.tables:
         for row in table.rows:
             parts.append(" | ".join(cell.text.strip() for cell in row.cells))
     return "\n".join(parts)
 
 
-def _extract_doc_via_libreoffice(fp: Path) -> str:
-    return _extract_via_libreoffice(fp)
-
-
 def _extract_via_libreoffice(fp: Path) -> str:
-    """Convert to txt using LibreOffice (must be installed)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         result = subprocess.run(
             ["libreoffice", "--headless", "--convert-to", "txt:Text", "--outdir", tmpdir, str(fp)],
@@ -172,10 +154,8 @@ def _extract_via_libreoffice(fp: Path) -> str:
         )
         if result.returncode != 0:
             raise RuntimeError(f"LibreOffice failed: {result.stderr.decode()}")
-        out_file = Path(tmpdir) / (fp.stem + ".txt")
-        if out_file.exists():
-            return out_file.read_text(encoding="utf-8", errors="ignore")
-    return ""
+        out = Path(tmpdir) / (fp.stem + ".txt")
+        return out.read_text(encoding="utf-8", errors="ignore") if out.exists() else ""
 
 
 def _extract_xlsx(fp: Path) -> str:
@@ -191,10 +171,6 @@ def _extract_xlsx(fp: Path) -> str:
     return "\n".join(parts)
 
 
-def _extract_xls_via_libreoffice(fp: Path) -> str:
-    return _extract_via_libreoffice(fp)
-
-
 def _extract_pptx(fp: Path) -> str:
     from pptx import Presentation
     prs = Presentation(str(fp))
@@ -208,16 +184,14 @@ def _extract_pptx(fp: Path) -> str:
 
 
 def _extract_html(fp: Path) -> str:
-    text = fp.read_text(encoding="utf-8", errors="ignore")
-    # Simple tag stripping — avoid bs4 dependency
     import re
+    text = fp.read_text(encoding="utf-8", errors="ignore")
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"&\w+;", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
 def _extract_rtf(fp: Path) -> str:
-    # Strip RTF control words
     import re
     text = fp.read_text(encoding="utf-8", errors="ignore")
     text = re.sub(r"\\[a-z]+\-?\d*\s?", " ", text)
@@ -228,15 +202,31 @@ def _extract_rtf(fp: Path) -> str:
 def _extract_image_ocr(fp: Path) -> str:
     from PIL import Image
     import pytesseract
-    img = Image.open(str(fp))
-    return pytesseract.image_to_string(img)
+    return pytesseract.image_to_string(Image.open(str(fp)))
+
+
+# ── Whisper singleton (load once, reuse — transcription is the slowest op) ───
+
+_whisper_model = None
+_whisper_lock  = threading.Lock()
+
+
+def _get_whisper() -> object:
+    global _whisper_model
+    if _whisper_model is None:
+        with _whisper_lock:
+            if _whisper_model is None:
+                from faster_whisper import WhisperModel
+                from config import WHISPER_MODEL, WHISPER_MODEL_DIR
+                _whisper_model = WhisperModel(
+                    WHISPER_MODEL, device="cpu", download_root=WHISPER_MODEL_DIR,
+                )
+                log.info("Whisper model loaded: %s", WHISPER_MODEL)
+    return _whisper_model
 
 
 def _extract_audio_whisper(fp: Path) -> str:
-    """Transcribe audio file using faster-whisper."""
-    from faster_whisper import WhisperModel
-    from config import WHISPER_MODEL, WHISPER_MODEL_DIR
-    model = WhisperModel(WHISPER_MODEL, device="cpu", download_root=WHISPER_MODEL_DIR)
+    model = _get_whisper()
     segments, _ = model.transcribe(str(fp), beam_size=5)
     return " ".join(seg.text for seg in segments)
 
@@ -245,14 +235,9 @@ def _extract_eml(fp: Path) -> str:
     import email
     msg = email.message_from_bytes(fp.read_bytes())
     parts = []
-    if msg["subject"]:
-        parts.append(f"Subject: {msg['subject']}")
-    if msg["from"]:
-        parts.append(f"From: {msg['from']}")
-    if msg["to"]:
-        parts.append(f"To: {msg['to']}")
-    if msg["date"]:
-        parts.append(f"Date: {msg['date']}")
+    for hdr in ("subject", "from", "to", "date"):
+        if msg[hdr]:
+            parts.append(f"{hdr.capitalize()}: {msg[hdr]}")
     for part in msg.walk():
         if part.get_content_type() == "text/plain":
             payload = part.get_payload(decode=True)
@@ -261,100 +246,87 @@ def _extract_eml(fp: Path) -> str:
     return "\n".join(parts)
 
 
-# ── Embedding ─────────────────────────────────────────────────────────────────
-
-_idx_embed_buf = {"count": 0, "tokens": 0}
-_idx_embed_lock = __import__("threading").Lock()
-
-
-def _flush_idx_embed_tokens() -> None:
-    tok = _idx_embed_buf["tokens"]
-    if tok <= 0:
-        return
-    _idx_embed_buf["count"] = 0
-    _idx_embed_buf["tokens"] = 0
-    try:
-        from models import log_system_tokens
-        log_system_tokens(source="system:embed", prompt_tokens=tok, completion_tokens=0)
-    except Exception:
-        pass
-
-
-def embed_text(text: str) -> list[float]:
-    resp = requests.post(
-        f"{OLLAMA_URL}/api/embeddings",
-        json={"model": EMBED_MODEL, "prompt": text[:8192]},
-        timeout=60,
-    )
-    resp.raise_for_status()
-    rj = resp.json()
-    p_tok = rj.get("prompt_eval_count", 0)
-    if p_tok:
-        with _idx_embed_lock:
-            _idx_embed_buf["count"] += 1
-            _idx_embed_buf["tokens"] += p_tok
-            if _idx_embed_buf["count"] >= 50:
-                _flush_idx_embed_tokens()
-    return rj["embedding"]
-
-
-# ── Hash ──────────────────────────────────────────────────────────────────────
+# ── File hash ─────────────────────────────────────────────────────────────────
 
 def file_hash(fp: Path, chunk_size: int = 1 << 20) -> str:
-    """sha256 of file contents, reading in 1 MB chunks (safe for large files)."""
     h = hashlib.sha256()
     with fp.open("rb") as f:
-        while True:
-            block = f.read(chunk_size)
-            if not block:
-                break
+        while block := f.read(chunk_size):
             h.update(block)
     return h.hexdigest()
 
 
+# ── Batch embedding ───────────────────────────────────────────────────────────
+
+def _embed_batch(texts: list[str]) -> list[list[float]]:
+    """
+    Embed up to EMBED_BATCH_SIZE texts in one /api/embed call.
+    Returns L2-normalised embeddings.
+    """
+    resp = requests.post(
+        f"{OLLAMA_URL}/api/embed",
+        json={"model": EMBED_MODEL, "input": [t[:8192] for t in texts]},
+        timeout=120,
+    )
+    resp.raise_for_status()
+    raw = resp.json()["embeddings"]
+    result = []
+    for emb in raw:
+        norm = math.sqrt(sum(x * x for x in emb)) or 1.0
+        result.append([x / norm for x in emb])
+    return result
+
+
+def _embed_all(texts: list[str]) -> list[list[float]]:
+    """Embed an arbitrary number of texts, honouring EMBED_BATCH_SIZE cap."""
+    out = []
+    for i in range(0, len(texts), EMBED_BATCH_SIZE):
+        out.extend(_embed_batch(texts[i:i + EMBED_BATCH_SIZE]))
+    return out
+
+
 # ── Job tracking ──────────────────────────────────────────────────────────────
 
-_jobs: dict[str, dict] = {}   # job_id → {status, progress, total, errors, done}
-_jobs_lock = threading.Lock()
+_jobs:        dict[str, dict] = {}
+_cancel_jobs: set[str]        = set()
+_jobs_lock    = threading.Lock()
 
-# Shared status file — written by any process running the indexer so the web
-# UI can display live progress even when indexing was triggered externally.
 _STATUS_FILE: Optional[Path] = None
 
-def _get_status_file() -> Path:
+
+def _status_file() -> Path:
     global _STATUS_FILE
     if _STATUS_FILE is None:
-        from config import DB_PATH
         _STATUS_FILE = Path(DB_PATH).parent / "indexer_status.json"
     return _STATUS_FILE
 
 
-def _write_status_file(data: dict) -> None:
+def _write_status(data: dict) -> None:
     try:
-        p = _get_status_file()
-        p.write_text(json.dumps(data))
+        _status_file().write_text(json.dumps(data))
     except Exception:
         pass
 
 
 def read_live_status() -> Optional[dict]:
-    """Read indexer status written by any process. Returns None if no active job."""
+    """Read indexer status from any process. Returns None if no active job."""
     try:
-        p = _get_status_file()
+        p = _status_file()
         if not p.exists():
             return None
-        data = json.loads(p.read_text())
-        return data
+        return json.loads(p.read_text())
     except Exception:
         return None
 
 
 def _new_job() -> str:
     job_id = str(uuid.uuid4())
+    state  = {"status": "queued", "stage": "queued",
+               "indexed": 0, "skipped": 0, "errors": 0,
+               "total": 0, "done": False, "messages": []}
     with _jobs_lock:
-        _jobs[job_id] = {"status": "queued", "indexed": 0, "skipped": 0,
-                         "errors": 0, "total": 0, "done": False, "messages": []}
-    _write_status_file({**_jobs[job_id], "job_id": job_id})
+        _jobs[job_id] = state
+    _write_status({**state, "job_id": job_id})
     return job_id
 
 
@@ -363,293 +335,437 @@ def get_job_status(job_id: str) -> Optional[dict]:
         return dict(_jobs.get(job_id, {}))
 
 
-def _update_job(job_id: str, **kwargs):
+def _update_job(job_id: str, **kwargs) -> None:
     with _jobs_lock:
         if job_id in _jobs:
             _jobs[job_id].update(kwargs)
-            _write_status_file({**_jobs[job_id], "job_id": job_id})
+            _write_status({**_jobs[job_id], "job_id": job_id})
 
 
-# ── Core indexing logic ───────────────────────────────────────────────────────
+def _is_cancelled(job_id: str) -> bool:
+    return job_id in _cancel_jobs
 
-def _index_file(
-    fp: Path,
-    collection_name: str,
-    db: Session,
-    job_id: str,
-    source_label: Optional[str] = None,
-    case_id: Optional[int] = None,
-) -> tuple[int, bool]:
+
+def cancel_job(job_id: str) -> bool:
+    """Request cancellation of a running job. Returns True if job was found."""
+    with _jobs_lock:
+        if job_id not in _jobs:
+            return False
+        _cancel_jobs.add(job_id)
+        _jobs[job_id].update({"status": "cancelling", "stage": "cancelling"})
+        _write_status({**_jobs[job_id], "job_id": job_id})
+    return True
+
+
+# ── Stage 1 — Scanner / gatekeeper ───────────────────────────────────────────
+
+def _should_index(fp: Path) -> tuple[bool, Optional[str], Optional[str], int, str, bool]:
     """
-    Index a single file into ChromaDB.
-    Returns (chunks_added, was_skipped).
-
-    Optimization order:
-      1. stat() for mtime — cheap syscall, skips most files on large NAS
-      2. Hash only if mtime changed — avoids reading file contents unnecessarily
-      3. Extract + embed only if hash changed
+    Cheap mtime/hash check against SQLite. Called on the main scan thread.
+    Returns (needs_index, fhash, fmtime, fsize, reason, is_update).
+    reason is for logging only.
     """
-    ext = fp.suffix.lower()
-    if ext not in ALL_SUPPORTED:
-        return 0, True
-
-    # Step 1: stat — cheap, avoids even opening the file
     try:
-        stat = fp.stat()
-        fsize = stat.st_size
+        stat   = fp.stat()
+        fsize  = stat.st_size
         fmtime = str(stat.st_mtime)
     except OSError as e:
-        log.warning("Cannot stat %s (NAS disconnect?): %s", fp, e)
-        return 0, True
+        log.warning("stat failed %s: %s", fp, e)
+        return False, None, None, 0, "stat_error", False
 
-    existing = db.query(IndexedFile).filter(IndexedFile.file_path == str(fp)).first()
-
-    # Step 2: if mtime unchanged, skip entirely (no hash needed)
-    if existing and existing.mtime == fmtime:
-        return 0, True
-
-    # Step 3: mtime changed (or new file) — now hash to confirm content change
+    db = SessionLocal()
     try:
-        fhash = file_hash(fp)
-    except OSError as e:
-        log.warning("Cannot hash %s: %s", fp, e)
-        return 0, True
+        existing = db.query(IndexedFile).filter(IndexedFile.file_path == str(fp)).first()
 
-    if existing and existing.file_hash == fhash:
-        # Content identical despite mtime change (e.g. NAS touch) — update mtime only
-        existing.mtime = fmtime
-        db.commit()
-        return 0, True
+        if existing and existing.mtime == fmtime:
+            return False, None, None, 0, "mtime_match", False
 
-    # Extract text
+        # mtime changed — check hash to distinguish real change vs NAS touch
+        try:
+            fhash = file_hash(fp)
+        except OSError as e:
+            log.warning("hash failed %s: %s", fp, e)
+            return False, None, None, 0, "hash_error", False
+
+        if existing and existing.file_hash == fhash:
+            # Content identical — just update the mtime stamp and skip extraction
+            existing.mtime = fmtime
+            db.commit()
+            return False, fhash, fmtime, fsize, "mtime_only", False
+
+        return True, fhash, fmtime, fsize, "changed" if existing else "new", existing is not None
+    finally:
+        db.close()
+
+
+# ── Stage 2 — Extract (runs in worker threads) ────────────────────────────────
+
+def _extract_worker(
+    fp: Path,
+    collection_name: str,
+    source_label: str,
+    case_id: Optional[int],
+    fhash: str,
+    fmtime: str,
+    fsize: int,
+    is_update: bool,
+) -> Optional[dict]:
+    """
+    Extract text and chunk it. Returns a result dict or None on failure.
+    Thread-safe: no shared mutable state.
+    """
     text = extract_text(fp)
     if not text.strip():
         log.debug("No text extracted from %s", fp)
-        return 0, False
+        return None
 
-    # Chunk
     chunks = chunk_text(text)
     if not chunks:
-        return 0, False
+        return None
 
-    # Get or create ChromaDB collection
-    from rag import get_or_create_collection
-    coll = get_or_create_collection(collection_name)
-
-    # Remove old chunks for this file if re-indexing
-    if existing:
-        try:
-            old_ids = [f"{fp}__chunk_{i}" for i in range(existing.chunk_count)]
-            if old_ids:
-                coll.delete(ids=old_ids)
-                # Also clean FTS5
-                try:
-                    import sqlite3
-                    from config import DB_PATH
-                    fts_conn = sqlite3.connect(str(DB_PATH))
-                    fts_cur = fts_conn.cursor()
-                    for old_id in old_ids:
-                        fts_cur.execute("DELETE FROM chunk_fts WHERE chunk_id = ?", (old_id,))
-                    fts_conn.commit()
-                    fts_conn.close()
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-    # Embed and upsert chunks
-    label = source_label or fp.name
-    doc_ids, embeddings, docs, metas = [], [], [], []
-    for i, chunk in enumerate(chunks):
-        try:
-            emb = embed_text(chunk)
-        except Exception as e:
-            log.warning("Embed failed chunk %d of %s: %s", i, fp, e)
-            continue
-        doc_ids.append(f"{fp}__chunk_{i}")
-        embeddings.append(emb)
-        docs.append(chunk)
-        metas.append({
-            "source": label,
-            "path": str(fp),
-            "chunk": i,
-            "total_chunks": len(chunks),
-            "ext": ext,
-        })
-
-    if doc_ids:
-        coll.upsert(ids=doc_ids, embeddings=embeddings, documents=docs, metadatas=metas)
-
-    # Insert into FTS5 for hybrid search
-    try:
-        import sqlite3
-        from config import DB_PATH
-        fts_conn = sqlite3.connect(str(DB_PATH))
-        fts_cur = fts_conn.cursor()
-        for doc_id, chunk_doc in zip(doc_ids, docs):
-            fts_cur.execute(
-                "INSERT OR REPLACE INTO chunk_fts(chunk_id, collection, source, content) VALUES (?, ?, ?, ?)",
-                (doc_id, collection_name, label, chunk_doc)
-            )
-        fts_conn.commit()
-        fts_conn.close()
-    except Exception as e:
-        log.warning("FTS5 index failed: %s", e)
-
-    # Update SQLite state
-    from datetime import datetime as _dt
-    if existing:
-        existing.file_hash = fhash
-        existing.size_bytes = fsize
-        existing.mtime = fmtime
-        existing.chunk_count = len(doc_ids)
-        existing.collection = collection_name
-        existing.indexed_at = _dt.utcnow()
-        if case_id is not None:
-            existing.case_id = case_id
-    else:
-        db.add(IndexedFile(
-            file_path=str(fp),
-            file_hash=fhash,
-            size_bytes=fsize,
-            mtime=fmtime,
-            chunk_count=len(doc_ids),
-            collection=collection_name,
-            case_id=case_id,
-        ))
-    db.commit()
-
-    return len(doc_ids), False
-
-
-# ── Case NAS index (background job) ──────────────────────────────────────────
-
-def start_case_index(case_id: int, nas_path: str) -> str:
-    """
-    Index a single case's NAS path into its own ChromaDB collection.
-    Only processes files new or changed since last run (mtime-first).
-    Returns job_id.
-    """
-    from models import Case, case_collection
-    job_id = _new_job()
-
-    def _run():
+    # For updates: how many old chunks existed (to detect shrinkage)
+    old_chunk_count = 0
+    if is_update:
         db = SessionLocal()
         try:
-            _update_job(job_id, status="running")
-            indexed = skipped = errors = 0
+            rec = db.query(IndexedFile).filter(IndexedFile.file_path == str(fp)).first()
+            old_chunk_count = rec.chunk_count if rec else 0
+        finally:
+            db.close()
 
-            root = Path(nas_path)
-            if not root.exists():
-                _update_job(job_id, status="error", done=True,
-                            messages=[f"NAS path not accessible: {nas_path}"])
-                return
+    return {
+        "fp":         fp,
+        "chunks":     chunks,
+        "label":      source_label,
+        "fhash":      fhash,
+        "fmtime":     fmtime,
+        "fsize":      fsize,
+        "ext":        fp.suffix.lower(),
+        "collection": collection_name,
+        "case_id":    case_id,
+        "is_update":  is_update,
+        "old_count":  old_chunk_count,
+    }
 
-            coll_name = case_collection(case_id)
-            all_files = [
-                fp for fp in root.rglob("*")
-                if fp.is_file() and fp.suffix.lower() in ALL_SUPPORTED
-            ]
-            _update_job(job_id, total=len(all_files))
-            log.info("Case %d: scanning %d files in %s", case_id, len(all_files), nas_path)
 
-            for fp in all_files:
+# ── Stage 3 — Embed + upsert (single writer thread) ──────────────────────────
+
+def _flush_batch(
+    results:    list[dict],
+    coll,
+    fts_conn:   _sqlite3.Connection,
+    write_db:   Session,
+) -> int:
+    """
+    Embed all chunks in results (batched to EMBED_BATCH_SIZE), upsert to
+    ChromaDB + FTS5 + SQLite. Atomic per file: each file either fully
+    commits or is skipped on error — no partial state.
+    Returns number of files successfully flushed.
+    """
+    if not results:
+        return 0
+
+    # Collect all chunk texts across all files for a single embed call
+    all_texts: list[str] = []
+    spans:     list[tuple[dict, int, int]] = []   # (result, start, end)
+    for r in results:
+        s = len(all_texts)
+        all_texts.extend(r["chunks"])
+        spans.append((r, s, len(all_texts)))
+
+    try:
+        all_embeddings = _embed_all(all_texts)
+    except Exception as e:
+        log.error("Batch embed failed (%d chunks): %s", len(all_texts), e)
+        return 0
+
+    fts_cur = fts_conn.cursor()
+    flushed = 0
+
+    for result, start, end in spans:
+        fp         = result["fp"]
+        chunks     = result["chunks"]
+        embeddings = all_embeddings[start:end]
+        label      = result["label"]
+        ext        = result["ext"]
+        col        = result["collection"]
+
+        doc_ids = [f"{fp}__chunk_{i}" for i in range(len(chunks))]
+        metas   = [
+            {"source": label, "path": str(fp), "chunk": i,
+             "total_chunks": len(chunks), "ext": ext}
+            for i in range(len(chunks))
+        ]
+
+        # Delete excess old chunks if file shrank
+        if result["is_update"] and result["old_count"] > len(chunks):
+            excess = [f"{fp}__chunk_{i}" for i in range(len(chunks), result["old_count"])]
+            try:
+                coll.delete(ids=excess)
+                fts_cur.executemany("DELETE FROM chunk_fts WHERE chunk_id = ?",
+                                    [(eid,) for eid in excess])
+            except Exception:
+                pass
+
+        try:
+            coll.upsert(ids=doc_ids, embeddings=embeddings,
+                        documents=chunks, metadatas=metas)
+        except Exception as e:
+            log.error("ChromaDB upsert failed for %s: %s", fp, e)
+            continue
+
+        try:
+            fts_cur.executemany(
+                "INSERT OR REPLACE INTO chunk_fts(chunk_id, collection, source, content)"
+                " VALUES (?,?,?,?)",
+                [(did, col, label, txt) for did, txt in zip(doc_ids, chunks)],
+            )
+        except Exception as e:
+            log.warning("FTS5 upsert failed for %s: %s", fp, e)
+
+        # SQLite indexed_files — commit per file so crashes leave known-good state
+        try:
+            existing = write_db.query(IndexedFile).filter(
+                IndexedFile.file_path == str(fp)
+            ).first()
+            if existing:
+                existing.file_hash   = result["fhash"]
+                existing.size_bytes  = result["fsize"]
+                existing.mtime       = result["fmtime"]
+                existing.chunk_count = len(doc_ids)
+                existing.collection  = col
+                existing.indexed_at  = _dt.utcnow()
+                if result["case_id"] is not None:
+                    existing.case_id = result["case_id"]
+            else:
+                write_db.add(IndexedFile(
+                    file_path    = str(fp),
+                    file_hash    = result["fhash"],
+                    size_bytes   = result["fsize"],
+                    mtime        = result["fmtime"],
+                    chunk_count  = len(doc_ids),
+                    collection   = col,
+                    case_id      = result["case_id"],
+                ))
+            write_db.commit()
+        except Exception as e:
+            log.error("SQLite commit failed for %s: %s", fp, e)
+            write_db.rollback()
+            continue
+
+        flushed += 1
+
+    fts_conn.commit()
+    return flushed
+
+
+# ── Pipeline orchestrator ─────────────────────────────────────────────────────
+
+def _run_pipeline(
+    file_paths:       list[Path],
+    collection_name:  str,
+    job_id:           str,
+    source_label_fn:  Optional[callable] = None,
+    case_id:          Optional[int]      = None,
+) -> tuple[int, int, int]:
+    """
+    Runs the full extract → embed → upsert pipeline.
+    Returns (indexed, skipped, errors).
+
+    Cancellation: checked after each file completes. Pending work is
+    discarded; already-flushed files are committed and remain valid.
+    """
+    from rag import get_or_create_collection
+
+    coll     = get_or_create_collection(collection_name)
+    fts_conn = _sqlite3.connect(str(DB_PATH))
+    write_db = SessionLocal()
+
+    indexed = skipped = errors = 0
+    pending: list[dict] = []
+
+    try:
+        # ── Stage 1: scan + filter (main thread) ──────────────────────────────
+        _update_job(job_id, stage="scanning", total=len(file_paths))
+        to_extract: list[tuple[Path, str, str, str, int, bool]] = []
+
+        for fp in file_paths:
+            if _is_cancelled(job_id):
+                break
+            needs, fhash, fmtime, fsize, reason, is_update = _should_index(fp)
+            if needs:
+                label = source_label_fn(fp) if source_label_fn else fp.name
+                to_extract.append((fp, label, fhash, fmtime, fsize, is_update))
+            else:
+                skipped += 1
+            _update_job(job_id, skipped=skipped)
+
+        if _is_cancelled(job_id):
+            _update_job(job_id, status="cancelled", stage="cancelled", done=True)
+            return indexed, skipped, errors
+
+        log.info("Pipeline scan done: %d to extract, %d skipped", len(to_extract), skipped)
+
+        # ── Stage 2: extract (thread pool) ────────────────────────────────────
+        _update_job(job_id, stage="extracting", total=len(file_paths))
+
+        def _submit(args):
+            fp, label, fhash, fmtime, fsize, is_update = args
+            return _extract_worker(fp, collection_name, label, case_id,
+                                   fhash, fmtime, fsize, is_update)
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=N_EXTRACT_WORKERS,
+            thread_name_prefix="sherlock-extract",
+        ) as pool:
+            future_map = {pool.submit(_submit, args): args[0] for args in to_extract}
+
+            for future in concurrent.futures.as_completed(future_map):
+                fp = future_map[future]
+
+                if _is_cancelled(job_id):
+                    # Cancel remaining futures; already-submitted ones finish naturally
+                    for f in future_map:
+                        f.cancel()
+                    break
+
                 try:
-                    added, was_skipped = _index_file(
-                        fp, coll_name, db, job_id,
-                        source_label=fp.name,
-                        case_id=case_id,
-                    )
-                    if was_skipped:
-                        skipped += 1
-                    else:
-                        indexed += 1
+                    result = future.result()
                 except Exception as e:
                     errors += 1
-                    log.error("Error indexing %s (case %d): %s", fp, case_id, e)
-                    db.rollback()  # reset session so next file can proceed
-                _update_job(job_id, indexed=indexed, skipped=skipped, errors=errors)
+                    log.error("Extract error %s: %s", fp, e)
+                    _update_job(job_id, indexed=indexed, skipped=skipped, errors=errors)
+                    continue
 
-            # Update case record with index timestamp and count
-            from datetime import datetime as _dt
-            case = db.query(Case).filter(Case.id == case_id).first()
-            if case:
-                case.last_indexed = _dt.utcnow()
-                case.indexed_count = (
-                    db.query(IndexedFile)
-                    .filter(IndexedFile.case_id == case_id)
-                    .count()
-                )
-                db.commit()
+                if result is None:
+                    # extract_text returned empty — count as skipped, not error
+                    skipped += 1
+                    _update_job(job_id, skipped=skipped)
+                    continue
 
-            log.info(
-                "case_index_done",
-                extra={"job_id": job_id, "case_id": case_id,
-                       "indexed": indexed, "skipped": skipped, "errors": errors},
-            )
-            _update_job(job_id, status="done", done=True)
-        except Exception as e:
-            log.error("case_index_error", extra={"job_id": job_id, "case_id": case_id, "detail": str(e)})
-            _update_job(job_id, status="error", done=True, messages=[str(e)])
-        finally:
-            db.close()
+                pending.append(result)
 
-    threading.Thread(target=_run, daemon=True).start()
-    return job_id
+                # ── Stage 3: embed + upsert when batch is full ─────────────
+                if len(pending) >= FILE_BATCH_SIZE:
+                    _update_job(job_id, stage="embedding")
+                    n = _flush_batch(pending, coll, fts_conn, write_db)
+                    indexed += n
+                    errors  += len(pending) - n
+                    pending.clear()
+                    _update_job(job_id, stage="extracting",
+                                indexed=indexed, skipped=skipped, errors=errors)
+
+        # Final flush of whatever's left
+        if pending and not _is_cancelled(job_id):
+            _update_job(job_id, stage="embedding")
+            n = _flush_batch(pending, coll, fts_conn, write_db)
+            indexed += n
+            errors  += len(pending) - n
+            pending.clear()
+
+        if _is_cancelled(job_id):
+            _update_job(job_id, status="cancelled", stage="cancelled", done=True)
+        else:
+            _update_job(job_id, status="done", stage="done",
+                        indexed=indexed, skipped=skipped, errors=errors, done=True)
+
+    except Exception as e:
+        log.error("Pipeline error (job %s): %s", job_id, e)
+        _update_job(job_id, status="error", stage="error", done=True, messages=[str(e)])
+    finally:
+        fts_conn.close()
+        write_db.close()
+
+    return indexed, skipped, errors
 
 
-# ── Legacy NAS index (global, used by admin re-index button) ──────────────────
+# ── Public job launchers ──────────────────────────────────────────────────────
 
-def start_nas_index(nas_paths: list[str]) -> str:
-    """Index a flat list of NAS paths into the global collection. Returns job_id."""
+def start_case_index(case_id: int, nas_path: str) -> str:
+    """Index a case's NAS path into its own ChromaDB collection. Returns job_id."""
+    from models import Case, case_collection
+
     job_id = _new_job()
 
     def _run():
+        _update_job(job_id, status="running")
+        root = Path(nas_path)
+        if not root.exists():
+            _update_job(job_id, status="error", done=True,
+                        messages=[f"NAS path not accessible: {nas_path}"])
+            return
+
+        col_name   = case_collection(case_id)
+        file_paths = [
+            fp for fp in root.rglob("*")
+            if fp.is_file() and fp.suffix.lower() in ALL_SUPPORTED
+        ]
+
+        indexed, skipped, errors = _run_pipeline(
+            file_paths, col_name, job_id,
+            source_label_fn=lambda fp: fp.name,
+            case_id=case_id,
+        )
+
+        # Update case record
         db = SessionLocal()
         try:
-            _update_job(job_id, status="running")
-            indexed = skipped = errors = 0
-
-            for nas_path in nas_paths:
-                root = Path(nas_path)
-                if not root.exists():
-                    _update_job(job_id, messages=[f"⚠ NAS path not accessible: {nas_path}"])
-                    continue
-
-                all_files = [
-                    fp for fp in root.rglob("*")
-                    if fp.is_file() and fp.suffix.lower() in ALL_SUPPORTED
-                ]
-                _update_job(job_id, total=len(all_files))
-
-                for fp in all_files:
-                    try:
-                        added, was_skipped = _index_file(fp, GLOBAL_COLLECTION, db, job_id)
-                        if was_skipped:
-                            skipped += 1
-                        else:
-                            indexed += 1
-                    except Exception as e:
-                        errors += 1
-                        log.error("Error indexing %s: %s", fp, e)
-                        db.rollback()  # reset session so next file can proceed
-                    _update_job(job_id, indexed=indexed, skipped=skipped, errors=errors)
-
-            _update_job(job_id, status="done", done=True)
-        except Exception as e:
-            _update_job(job_id, status="error", done=True, messages=[str(e)])
+            case = db.query(Case).filter(Case.id == case_id).first()
+            if case:
+                case.last_indexed  = _dt.utcnow()
+                case.indexed_count = (
+                    db.query(IndexedFile).filter(IndexedFile.case_id == case_id).count()
+                )
+                db.commit()
         finally:
             db.close()
 
-    threading.Thread(target=_run, daemon=True).start()
+        log.info("case_index_done", extra={
+            "job_id": job_id, "case_id": case_id,
+            "indexed": indexed, "skipped": skipped, "errors": errors,
+        })
+
+    threading.Thread(target=_run, daemon=True, name=f"index-case-{case_id}").start()
     return job_id
 
 
-# ── User upload indexing (background job) ─────────────────────────────────────
+def start_nas_index(nas_paths: list[str]) -> str:
+    """Index a list of NAS paths into the global collection. Returns job_id."""
+    job_id = _new_job()
+
+    def _run():
+        _update_job(job_id, status="running")
+        all_files: list[Path] = []
+
+        for nas_path in nas_paths:
+            root = Path(nas_path)
+            if not root.exists():
+                _update_job(job_id, messages=[f"⚠ NAS path not accessible: {nas_path}"])
+                continue
+            all_files.extend(
+                fp for fp in root.rglob("*")
+                if fp.is_file() and fp.suffix.lower() in ALL_SUPPORTED
+            )
+
+        if not all_files:
+            _update_job(job_id, status="done", done=True)
+            return
+
+        _run_pipeline(all_files, GLOBAL_COLLECTION, job_id)
+        log.info("nas_index_done", extra={"job_id": job_id, "paths": nas_paths})
+
+    threading.Thread(target=_run, daemon=True, name="index-nas-global").start()
+    return job_id
+
 
 def start_upload_index(upload_id: int, user_id: int, filepath: Path) -> str:
-    """Index a user-uploaded file into their private collection. Returns job_id."""
-    job_id = _new_job()
+    """
+    Index a single user-uploaded file into their private collection.
+    Minimal path — no thread pool overhead for one file.
+    Returns job_id.
+    """
+    job_id   = _new_job()
+    col_name = user_collection(user_id)
 
     def _run():
         db = SessionLocal()
@@ -662,31 +778,65 @@ def start_upload_index(upload_id: int, user_id: int, filepath: Path) -> str:
             upload.status = "indexing"
             db.commit()
 
-            _update_job(job_id, status="running", total=1)
-            added, _ = _index_file(
-                filepath,
-                user_collection(user_id),
-                db,
-                job_id,
-                source_label=filepath.name,
+            _update_job(job_id, status="running", stage="scanning", total=1)
+
+            needs, fhash, fmtime, fsize, reason, is_update = _should_index(filepath)
+            if not needs:
+                # Already indexed and unchanged
+                upload.status = "ready"
+                db.commit()
+                _update_job(job_id, status="done", stage="done", done=True, skipped=1)
+                return
+
+            _update_job(job_id, stage="extracting")
+            label  = filepath.name
+            result = _extract_worker(
+                filepath, col_name, label, None, fhash, fmtime, fsize, is_update
             )
 
-            # Store ChromaDB IDs on upload record
-            chunk_ids = [f"{filepath}__chunk_{i}" for i in range(added)]
+            if result is None:
+                upload.status    = "error"
+                upload.error_msg = "No text could be extracted from this file."
+                db.commit()
+                _update_job(job_id, status="error", stage="error", done=True,
+                            messages=["No text extracted"])
+                return
+
+            _update_job(job_id, stage="embedding")
+            from rag import get_or_create_collection
+            coll     = get_or_create_collection(col_name)
+            fts_conn = _sqlite3.connect(str(DB_PATH))
+            write_db = SessionLocal()
+            try:
+                n = _flush_batch([result], coll, fts_conn, write_db)
+            finally:
+                fts_conn.close()
+                write_db.close()
+
+            chunk_ids    = [f"{filepath}__chunk_{i}" for i in range(len(result["chunks"]))]
             upload.chroma_ids = json.dumps(chunk_ids)
-            upload.status = "ready"
+            upload.status = "ready" if n else "error"
+            if not n:
+                upload.error_msg = "Embedding or upsert failed."
             db.commit()
 
-            _update_job(job_id, status="done", done=True, indexed=added)
+            _update_job(job_id, status="done" if n else "error",
+                        stage="done" if n else "error",
+                        indexed=n, done=True)
+
         except Exception as e:
             log.error("Upload index error: %s", e)
-            if upload := db.query(Upload).filter(Upload.id == upload_id).first():
-                upload.status = "error"
-                upload.error_msg = str(e)
-                db.commit()
-            _update_job(job_id, status="error", done=True, messages=[str(e)])
+            try:
+                rec = db.query(Upload).filter(Upload.id == upload_id).first()
+                if rec:
+                    rec.status    = "error"
+                    rec.error_msg = str(e)
+                    db.commit()
+            except Exception:
+                db.rollback()
+            _update_job(job_id, status="error", stage="error", done=True, messages=[str(e)])
         finally:
             db.close()
 
-    threading.Thread(target=_run, daemon=True).start()
+    threading.Thread(target=_run, daemon=True, name=f"index-upload-{upload_id}").start()
     return job_id

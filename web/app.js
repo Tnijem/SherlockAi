@@ -175,12 +175,18 @@ async function pollIndexerStatus() {
     const bar     = document.getElementById('indexBannerBar');
     const pct     = document.getElementById('indexBannerPct');
     if (s.active) {
-      const done  = s.indexed || 0;
-      const total = s.total  || 0;
+      const done   = s.indexed || 0;
+      const total  = s.total   || 0;
       const pctVal = total > 0 ? Math.round((done / total) * 100) : 0;
+      const stageLabel = {
+        scanning:   'Scanning files',
+        extracting: 'Extracting text',
+        embedding:  'Embedding chunks',
+        queued:     'Queued',
+      }[s.stage] || 'Indexing';
       text.textContent = total > 0
-        ? `Indexing files… ${done} / ${total}`
-        : `Indexing files…`;
+        ? `${stageLabel}… ${done} / ${total}`
+        : `${stageLabel}…`;
       bar.style.width  = (total > 0 ? pctVal : 40) + '%';
       pct.textContent  = total > 0 ? pctVal + '%' : '';
       banner.classList.remove('hidden');
