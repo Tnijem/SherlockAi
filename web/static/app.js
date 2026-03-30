@@ -477,11 +477,11 @@ async function liveAppendLogs() {
 }
 
 function toggleLogPanel() {
-  const viewer = document.getElementById('logViewer');
-  const btn    = document.getElementById('logPanelToggle');
-  if (!viewer) return;
-  const isHidden = viewer.classList.toggle('log-panel-hidden');
-  if (btn) btn.innerHTML = isHidden ? '&#9650;' : '&#9660;';
+  const section = document.querySelector('.log-viewer-section');
+  const btn     = document.getElementById('logPanelToggle');
+  if (!section) return;
+  const collapsed = section.classList.toggle('log-section-collapsed');
+  if (btn) btn.innerHTML = collapsed ? '&#9650;' : '&#9660;';
 }
 
 function downloadLog() {

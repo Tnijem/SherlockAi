@@ -154,7 +154,7 @@ def setup_logging(debug: bool = False) -> None:
     _web_logger = logging.getLogger("sherlock.web")
     _web_logger.setLevel(logging.INFO)
     _web_logger.addHandler(_rotating("web.log", max_mb=50, backups=5))
-    _web_logger.propagate = False  # separate from app.log
+    _web_logger.propagate = True   # also flows to app.log
 
     # ── Silence noisy libs
     for noisy in ("uvicorn.access", "httpx", "chromadb", "httpcore",

@@ -1274,7 +1274,8 @@ sup.cite-ref:hover { background: var(--gold-light); }
 }
 
 /* ── Log panel collapsed ─────────────────────────────────────────────────────*/
-.log-viewer.log-panel-hidden { display: none; }
+.log-viewer-section.log-section-collapsed { flex: 0 0 auto; }
+.log-viewer-section.log-section-collapsed .log-viewer { display: none; }
 
 /* ── Source citation clickable ───────────────────────────────────────────────*/
 .source-clickable {

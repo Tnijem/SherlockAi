@@ -47,7 +47,7 @@ from config import (
 from logging_config import audit, get_logger, request_id_var, setup_logging, tail_log
 from models import Case, Matter, Message, Output, Upload, User, case_collection, get_db, init_db
 
-log     = get_logger("sherlock.http")
+log     = get_logger("sherlock.web")
 log_app = get_logger("sherlock.app")
 
 # ── NAS mount monitor ──────────────────────────────────────────────────────────
