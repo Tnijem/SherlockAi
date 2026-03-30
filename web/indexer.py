@@ -317,12 +317,44 @@ def file_hash(fp: Path, chunk_size: int = 1 << 20) -> str:
 _jobs: dict[str, dict] = {}   # job_id → {status, progress, total, errors, done}
 _jobs_lock = threading.Lock()
 
+# Shared status file — written by any process running the indexer so the web
+# UI can display live progress even when indexing was triggered externally.
+_STATUS_FILE: Optional[Path] = None
+
+def _get_status_file() -> Path:
+    global _STATUS_FILE
+    if _STATUS_FILE is None:
+        from config import DB_PATH
+        _STATUS_FILE = Path(DB_PATH).parent / "indexer_status.json"
+    return _STATUS_FILE
+
+
+def _write_status_file(data: dict) -> None:
+    try:
+        p = _get_status_file()
+        p.write_text(json.dumps(data))
+    except Exception:
+        pass
+
+
+def read_live_status() -> Optional[dict]:
+    """Read indexer status written by any process. Returns None if no active job."""
+    try:
+        p = _get_status_file()
+        if not p.exists():
+            return None
+        data = json.loads(p.read_text())
+        return data
+    except Exception:
+        return None
+
 
 def _new_job() -> str:
     job_id = str(uuid.uuid4())
     with _jobs_lock:
         _jobs[job_id] = {"status": "queued", "indexed": 0, "skipped": 0,
                          "errors": 0, "total": 0, "done": False, "messages": []}
+    _write_status_file({**_jobs[job_id], "job_id": job_id})
     return job_id
 
 
@@ -335,6 +367,7 @@ def _update_job(job_id: str, **kwargs):
     with _jobs_lock:
         if job_id in _jobs:
             _jobs[job_id].update(kwargs)
+            _write_status_file({**_jobs[job_id], "job_id": job_id})
 
 
 # ── Core indexing logic ───────────────────────────────────────────────────────

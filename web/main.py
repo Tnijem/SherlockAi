@@ -1772,6 +1772,25 @@ def admin_reindex(
     return {"job_id": job_id}
 
 
+@app.get("/api/indexer/live-status")
+def indexer_live_status(current_user: User = Depends(auth.get_current_user)):
+    """Live indexer status readable by any logged-in user, from any process."""
+    # Check in-process jobs first (triggered via web UI)
+    with idx._jobs_lock:
+        running = [
+            {**job, "job_id": jid}
+            for jid, job in idx._jobs.items()
+            if not job.get("done") and job.get("status") in ("running", "queued")
+        ]
+    if running:
+        return {"active": True, **running[-1]}
+    # Fall back to shared status file (triggered externally, e.g. launchd)
+    data = idx.read_live_status()
+    if data and not data.get("done"):
+        return {"active": True, **data}
+    return {"active": False}
+
+
 @app.get("/api/admin/reindex/active")
 def admin_reindex_active(_: User = Depends(auth.require_admin)):
     """Return the most recent running reindex job, if any."""

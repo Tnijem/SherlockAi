@@ -42,6 +42,14 @@
     <button class="nas-banner-dismiss" onclick="dismissNasBanner()">&#x2715;</button>
   </div>
 
+  <!-- Indexer progress banner (shown whenever indexing is active, any source) -->
+  <div class="index-banner hidden" id="indexBanner">
+    <span class="index-banner-icon">&#9211;</span>
+    <span id="indexBannerText">Indexing files…</span>
+    <div class="index-banner-bar-wrap"><div class="index-banner-bar" id="indexBannerBar"></div></div>
+    <span id="indexBannerPct"></span>
+  </div>
+
   <!-- Body -->
   <div class="app-body">
 

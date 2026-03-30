@@ -51,7 +51,7 @@ _EXTRA_FIELDS = (
 class _JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         obj: dict = {
-            "ts":     datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+            "ts":     datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + datetime.now().astimezone().strftime("%z"),
             "level":  record.levelname,
             "logger": record.name,
             "msg":    record.getMessage(),
@@ -78,7 +78,7 @@ class _ConsoleFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         colour = self._COLOURS.get(record.levelname, "")
-        ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        ts = datetime.now().astimezone().strftime("%H:%M:%S")
         extra = ""
         for field in ("user_id", "event", "path", "status", "latency_total_ms", "latency_ms"):
             val = getattr(record, field, None)

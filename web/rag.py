@@ -43,7 +43,10 @@ def _chroma_client() -> chromadb.HttpClient:
 
 def get_or_create_collection(name: str) -> chromadb.Collection:
     client = _chroma_client()
-    return client.get_or_create_collection(name)
+    return client.get_or_create_collection(
+        name,
+        metadata={"hnsw:space": "cosine"},
+    )
 
 
 def collection_exists(name: str) -> bool:
@@ -69,7 +72,11 @@ def embed_text(text: str) -> list[float]:
     p_tok = rj.get("prompt_eval_count", 0)
     if p_tok:
         _accumulate_embed_tokens(p_tok)
-    return rj["embedding"]
+    emb = rj["embedding"]
+    # L2-normalize so cosine distance == 1 - dot product (valid for any model)
+    import math
+    norm = math.sqrt(sum(x * x for x in emb)) or 1.0
+    return [x / norm for x in emb]
 
 
 # ── Batched embed token logging (avoid DB write per chunk) ────────────────────
@@ -234,7 +241,12 @@ def retrieve(
     elif scope == "user":
         _add(user_collection(user_id))
     else:
+        # Case-specific collection (e.g. case_7_docs).
+        # Always include the global collection too — NAS files indexed
+        # via the global indexer land in sherlock_cases, not the per-case
+        # collection, so without this the query returns nothing.
         _add(scope)
+        _add(GLOBAL_COLLECTION)
 
     for coll in collections_to_query:
         try:
