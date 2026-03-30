@@ -109,6 +109,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Check research mode availability
   checkResearchStatus();
+
+  // Citation footnote clicks — open file in preview panel
+  document.getElementById('chatMessages').addEventListener('click', e => {
+    const cite = e.target.closest('.cite-ref[data-src-path]');
+    if (cite) openPreview(cite.dataset.srcPath, cite.dataset.srcFile);
+  });
 });
 
 // ── Theme ──────────────────────────────────────────────────────────────────────
@@ -240,7 +246,7 @@ function toggleLogRefresh() {
   if (!cb) return;
   if (cb.checked) {
     loadLogs();
-    _logRefreshTimer = setInterval(loadLogs, 3000);
+    _logRefreshTimer = setInterval(liveAppendLogs, 2000);
     label?.classList.add('active');
     if (dot) dot.style.display = 'inline-block';
   } else {
@@ -330,6 +336,9 @@ async function loadLogs() {
   // Store entries for detail expansion
   viewer._logEntries = entries;
 
+  // Track newest timestamp for live-append mode
+  viewer._liveLastTs = entries.reduce((m, e) => ((e.ts || '') > m ? (e.ts || '') : m), '');
+
   if (atBottom) viewer.scrollTop = viewer.scrollHeight;
 
   // Column sort click handlers
@@ -374,30 +383,30 @@ function toggleLogDetail(row) {
 }
 
 function initLogColResize() {
-  const head  = document.getElementById('logTableHead');
-  const table = document.getElementById('logTable');
-  if (!head || !table) return;
-  const heads = head.querySelectorAll('span[data-col]');
+  const head   = document.getElementById('logTableHead');
+  const viewer = document.getElementById('logViewer');
+  if (!head || !viewer) return;
+  const heads    = head.querySelectorAll('span[data-col]');
   const colNames = ['--log-col-ts', '--log-col-lvl', '--log-col-msg', '--log-col-detail'];
 
   heads.forEach((h, i) => {
-    h.style.cursor = 'pointer';
-    h.addEventListener('mousedown', (e) => {
-      // Only start a resize drag when clicking within 8px of the right edge
-      const rect = h.getBoundingClientRect();
-      if (e.clientX < rect.right - 8) return;
+    // Remove any existing handle to avoid duplication on re-render
+    h.querySelector('.log-col-handle')?.remove();
 
+    // Inject an explicit drag handle element (no edge-detection needed)
+    const handle = document.createElement('span');
+    handle.className = 'log-col-handle';
+    h.appendChild(handle);
+
+    handle.addEventListener('mousedown', (e) => {
       e.preventDefault();
+      e.stopPropagation(); // Don't fire the sort-click on the header
       const startX = e.clientX;
       const startW = h.offsetWidth;
-      let moved = false;
 
       function onMove(ev) {
-        moved = true;
-        const diff = ev.clientX - startX;
-        const newW = Math.max(40, startW + diff);
-        const viewer = document.getElementById('logViewer');
-        viewer?.style.setProperty(colNames[i], newW + 'px');
+        const newW = Math.max(40, startW + (ev.clientX - startX));
+        viewer.style.setProperty(colNames[i], newW + 'px');
       }
       function onUp() {
         document.removeEventListener('mousemove', onMove);
@@ -407,6 +416,72 @@ function initLogColResize() {
       document.addEventListener('mouseup', onUp);
     });
   });
+}
+
+async function liveAppendLogs() {
+  const stream = document.getElementById('logStream')?.value || 'app';
+  const level  = document.getElementById('logLevel')?.value  || '';
+  const search = document.getElementById('logSearch')?.value || '';
+  const viewer = document.getElementById('logViewer');
+  if (!viewer) return;
+
+  let url = `/api/admin/logs?stream=${encodeURIComponent(stream)}&lines=500`;
+  if (level)  url += `&level=${encodeURIComponent(level)}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+
+  let entries;
+  try {
+    const resp = await api('GET', url);
+    entries = Array.isArray(resp) ? resp : (resp?.entries ?? resp);
+  } catch { return; }
+
+  if (!entries?.length) return;
+
+  const lastTs = viewer._liveLastTs || '';
+  const table  = viewer.querySelector('#logTable');
+  if (!table) { loadLogs(); return; } // viewer was cleared, fall back to full load
+
+  const newEntries = lastTs
+    ? entries.filter(e => (e.ts || '') > lastTs)
+    : [];
+
+  if (!newEntries.length) return;
+
+  const skip = new Set(['ts', 'level', 'logger', 'msg', 'message', 'rid', 'exc_info']);
+  const existingCount = (viewer._logEntries || []).length;
+
+  newEntries.forEach((entry, j) => {
+    const lvl = (entry.level || 'INFO').toUpperCase();
+    const ts  = entry.ts ? entry.ts.replace('T', ' ').replace(/\.\d+/, '').replace('Z', '') : '';
+    const msg = escHtml(entry.msg || entry.message || '');
+    const extras = Object.entries(entry)
+      .filter(([k]) => !skip.has(k))
+      .map(([k, v]) => `${escHtml(k)}=${escHtml(String(v))}`)
+      .join('  ');
+
+    const row = document.createElement('div');
+    row.className = `log-entry log-level-${lvl}`;
+    row.dataset.logIdx = existingCount + j;
+    row.setAttribute('onclick', 'toggleLogDetail(this)');
+    row.innerHTML =
+      `<span class="log-ts">${ts}</span>` +
+      `<span class="log-badge">${lvl}</span>` +
+      `<span class="log-msg">${msg}</span>` +
+      `<span class="log-detail-col">${escHtml(extras)}</span>`;
+    table.appendChild(row);
+  });
+
+  viewer._logEntries = [...(viewer._logEntries || []), ...newEntries];
+  viewer._liveLastTs = newEntries[newEntries.length - 1].ts || lastTs;
+  viewer.scrollTop   = viewer.scrollHeight;
+}
+
+function toggleLogPanel() {
+  const viewer = document.getElementById('logViewer');
+  const btn    = document.getElementById('logPanelToggle');
+  if (!viewer) return;
+  const isHidden = viewer.classList.toggle('log-panel-hidden');
+  if (btn) btn.innerHTML = isHidden ? '&#9650;' : '&#9660;';
 }
 
 function downloadLog() {
@@ -693,9 +768,13 @@ function renderMessage(msg) {
       <button class="msg-export-btn" onclick="exportMemo(${msg.id})" title="Export as Word memo">&#128196;</button>
     </div>` : '';
 
+  const bubbleHtml = msg.role === 'assistant' && msg.content
+    ? linkifyCitations(renderMd(msg.content), msg.sources || [])
+    : escHtml(msg.content);
+
   return `
     <div class="msg ${msg.role}" id="msg-${msg.id}">
-      <div class="msg-bubble">${escHtml(msg.content)}</div>
+      <div class="msg-bubble">${bubbleHtml}</div>
       ${sourcesHtml}
       ${actionsHtml}
     </div>`;
@@ -1072,6 +1151,11 @@ async function sendMessage(overrideText = null) {
         } catch {}
       }
       scrollToBottom();
+    }
+
+    // Final render: convert markdown + linkify citation footnotes
+    if (fullText) {
+      bubble.innerHTML = linkifyCitations(renderMd(fullText), sources);
     }
 
     // Add sources + action buttons
@@ -2186,6 +2270,74 @@ function escHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Markdown renderer ─────────────────────────────────────────────────────────
+
+function renderMd(text) {
+  // HTML-escape first so inline patterns operate on safe text
+  let s = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Fenced code blocks (``` ... ```)
+  s = s.replace(/```[\s\S]*?```/g, m => {
+    const inner = m.slice(3, -3).replace(/^\w*\n/, '');
+    return `<pre><code>${inner}</code></pre>`;
+  });
+
+  // Inline code
+  s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+  // Headers
+  s = s.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+  s = s.replace(/^## (.+)$/gm,  '<h3>$1</h3>');
+  s = s.replace(/^# (.+)$/gm,   '<h2>$1</h2>');
+
+  // Bold + italic
+  s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  s = s.replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>');
+  s = s.replace(/\*([^*\n]+?)\*/g,    '<em>$1</em>');
+
+  // Lists — bullet then numbered
+  s = s.replace(/^[-•*] (.+)$/gm,  '<li>$1</li>');
+  s = s.replace(/^\d+\. (.+)$/gm,  '<li>$1</li>');
+  // Wrap runs of <li> in <ul>
+  s = s.replace(/(<li>[\s\S]+?<\/li>(\n|$))+/g, m => `<ul>${m}</ul>`);
+
+  // Paragraphs — split on blank lines; skip block elements
+  s = s.split(/\n\n+/).map(para => {
+    para = para.trim();
+    if (!para) return '';
+    if (/^<(?:h[2-4]|ul|ol|pre)/.test(para)) return para;
+    return `<p>${para.replace(/\n/g, '<br>')}</p>`;
+  }).join('');
+
+  return s;
+}
+
+// ── Citation linkifier ────────────────────────────────────────────────────────
+
+function linkifyCitations(html, sources) {
+  if (!sources?.length) return html;
+  const fileMap = {};
+  sources.forEach((s, i) => {
+    if (s.file) fileMap[s.file] = { idx: i, path: s.path || '', file: s.file };
+  });
+  // Match [filename] patterns; skip anything already inside an HTML tag
+  return html.replace(/\[([^\]<>\n]{1,120})\]/g, (match, name) => {
+    const entry = fileMap[name];
+    if (!entry) return match;
+    const num = entry.idx + 1;
+    const safePath = (entry.path || '').replace(/"/g, '&quot;');
+    const safeFile = (entry.file || '').replace(/"/g, '&quot;');
+    const safeName = name.replace(/"/g, '&quot;');
+    if (entry.path) {
+      return `<sup class="cite-ref" data-src-path="${safePath}" data-src-file="${safeFile}" title="${safeName}">${num}</sup>`;
+    }
+    return `<sup class="cite-ref" title="${safeName}">${num}</sup>`;
+  });
+}
+
 function renderSourceItem(s, i) {
   const isWeb = !!s.web;
   const hasPath = !!s.path && !isWeb;
@@ -2216,7 +2368,7 @@ function renderSourceItem(s, i) {
   const score = s.score && s.score < 1.0 ? ` <span style="opacity:0.4;font-size:10px;">${Math.round(s.score * 100)}%</span>` : '';
 
   return `<div class="${cls}" ${dataAttrs} ${rowHandler}>
-    <strong>[${i + 1}] ${isWeb ? '&#127760; ' : ''}${escHtml(s.file)}</strong>${score}${icon}${actions}${excerpt}
+    <span class="src-badge">${i + 1}</span><strong>${isWeb ? '&#127760; ' : ''}${escHtml(s.file)}</strong>${score}${icon}${actions}${excerpt}
   </div>`;
 }
 

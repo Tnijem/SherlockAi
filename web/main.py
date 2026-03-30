@@ -815,8 +815,9 @@ async def chat(
                 "description":    linked_case.description,
                 "matter_name":    matter.name,
             }
-            # Auto-scope to this case's collection unless the user explicitly chose "all"
-            if body.scope in ("all", "case", "both"):
+            # Auto-scope to this case's collection when user chose "case" or "both"
+            # "all" stays as "all" so retrieve() enumerates every collection
+            if body.scope in ("case", "both"):
                 resolved_scope = case_collection(matter.case_id)
     elif body.scope == "case":
         # Matter has no linked case but scope was "case" — fall back to "both"
@@ -1771,6 +1772,20 @@ def admin_reindex(
     return {"job_id": job_id}
 
 
+@app.get("/api/admin/reindex/active")
+def admin_reindex_active(_: User = Depends(auth.require_admin)):
+    """Return the most recent running reindex job, if any."""
+    with idx._jobs_lock:
+        running = [
+            (jid, job) for jid, job in idx._jobs.items()
+            if not job.get("done") and job.get("status") in ("running", "queued")
+        ]
+    if not running:
+        return {"active": False}
+    job_id, job = running[-1]
+    return {"active": True, "job_id": job_id, **job}
+
+
 @app.get("/api/admin/reindex/{job_id}/status")
 def admin_reindex_status(
     job_id: str,
@@ -1831,6 +1846,34 @@ def admin_get_config(
             "indexed_files": total_indexed,
         },
     }
+
+
+@app.post("/api/admin/nas-paths")
+def admin_set_nas_paths(
+    body: dict,
+    current_user: User = Depends(auth.require_admin),
+):
+    """Update NAS_PATHS in sherlock.conf and in-memory config without restart."""
+    import config as _config
+    paths = [p.strip() for p in body.get("nas_paths", []) if str(p).strip()]
+
+    _ROOT = Path(__file__).parent.parent
+    conf_path = _ROOT / "sherlock.conf"
+
+    existing: dict[str, str] = {}
+    if conf_path.exists():
+        for line in conf_path.read_text().splitlines():
+            if "=" in line and not line.strip().startswith("#"):
+                k, _, v = line.partition("=")
+                existing[k.strip()] = v.strip()
+
+    existing["NAS_PATHS"] = ",".join(paths)
+    conf_path.write_text("\n".join(f"{k}={v}" for k, v in existing.items()) + "\n")
+
+    # Update in-memory so new index jobs see the change immediately
+    _config.NAS_PATHS = paths
+
+    return {"saved": True, "nas_paths": paths}
 
 
 # ── Document preview ──────────────────────────────────────────────────────────
@@ -2239,7 +2282,7 @@ def delete_template(
 
 # ── Log viewer API ────────────────────────────────────────────────────────────
 
-_VALID_STREAMS = {"app", "audit", "rag", "indexer"}
+_VALID_STREAMS = {"app", "audit", "rag", "indexer", "web"}
 
 
 @app.get("/api/admin/logs")

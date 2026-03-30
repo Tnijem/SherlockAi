@@ -65,7 +65,7 @@
         <div class="sidebar-history" id="historyList"></div>
       </div>
       <div class="sidebar-footer">
-        <div class="sidebar-footer-brand">Sherlock Legal Intelligence&trade;</div>
+        <div class="sidebar-footer-brand">Sherlock&mdash;Local, Legal, Intelligence</div>
         <div class="sidebar-footer-copy">&copy; 2026 &nbsp;&middot;&nbsp; Proprietary &amp; Confidential</div>
         <div class="sidebar-footer-copy">Unauthorized use prohibited.</div>
       </div>
@@ -264,6 +264,7 @@
               <option value="audit">Audit</option>
               <option value="rag">RAG</option>
               <option value="indexer">Indexer</option>
+              <option value="web">Web</option>
             </select>
             <select id="logLevel" onchange="loadLogs()">
               <option value="">All levels</option>
@@ -279,6 +280,7 @@
             </label>
             <button class="btn log-btn" onclick="downloadLog()">&#8681;</button>
             <button class="btn log-btn" onclick="loadLogs()">&#8635;</button>
+            <button class="btn log-btn" id="logPanelToggle" onclick="toggleLogPanel()" title="Toggle log panel">&#9660;</button>
           </div>
           <div class="log-viewer" id="logViewer">
             <div class="log-empty">Select a stream and click ↻ Refresh to load.</div>

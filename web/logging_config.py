@@ -1,11 +1,12 @@
 """
 Sherlock centralized logging configuration.
 
-Four log streams, all JSON-structured, all rotating:
+Five log streams, all JSON-structured, all rotating:
   app.log      — HTTP requests, startup, errors, general events         (50 MB × 5)
   audit.log    — Compliance trail: logins, file access, config changes  (200 MB × 10)
   rag.log      — Every RAG query: latency, scope, sources, scores       (50 MB × 5)
   indexer.log  — Indexing jobs: files, chunks, timings, errors          (100 MB × 5)
+  web.log      — Web/HTTP access log (sherlock.web logger)              (50 MB × 5)
 
 Usage:
   from logging_config import get_logger, audit
@@ -20,6 +21,7 @@ import json
 import logging
 import logging.handlers
 import contextvars
+import re as _re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -148,6 +150,12 @@ def setup_logging(debug: bool = False) -> None:
     _idx_logger.addHandler(_rotating("indexer.log", max_mb=100, backups=5))
     _idx_logger.propagate = True
 
+    # ── sherlock.web → web.log (HTTP access / web layer events)
+    _web_logger = logging.getLogger("sherlock.web")
+    _web_logger.setLevel(logging.INFO)
+    _web_logger.addHandler(_rotating("web.log", max_mb=50, backups=5))
+    _web_logger.propagate = False  # separate from app.log
+
     # ── Silence noisy libs
     for noisy in ("uvicorn.access", "httpx", "chromadb", "httpcore",
                   "multipart", "sqlalchemy.engine"):
@@ -217,7 +225,9 @@ def tail_log(
         try:
             obj = json.loads(line)
         except Exception:
-            obj = {"ts": "-", "level": "RAW", "msg": line[:200]}
+            # Strip ANSI escape codes from plain-text log lines
+            clean = _re.sub(r'\x1b\[[0-9;]*[mKHJABCDfsu]', '', line)
+            obj = {"ts": "-", "level": "RAW", "msg": clean[:200]}
 
         if level_upper and obj.get("level") != level_upper:
             continue
