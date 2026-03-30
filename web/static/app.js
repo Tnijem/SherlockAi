@@ -2320,22 +2320,37 @@ function renderMd(text) {
 
 function linkifyCitations(html, sources) {
   if (!sources?.length) return html;
+
+  // Build lookup keyed by lowercased filename for case-insensitive matching
   const fileMap = {};
   sources.forEach((s, i) => {
-    if (s.file) fileMap[s.file] = { idx: i, path: s.path || '', file: s.file };
+    if (s.file) fileMap[s.file.toLowerCase()] = { idx: i, path: s.path || '', file: s.file };
   });
-  // Match [filename] patterns; skip anything already inside an HTML tag
+
+  // Normalize raw citation text to a bare filename key:
+  //   [Doc: Smith.txt]  → "smith.txt"
+  //   [Smith.txt, p.5]  → "smith.txt"
+  //   [Smith.txt]       → "smith.txt"
+  function normName(raw) {
+    let s = raw.trim();
+    s = s.replace(/^Doc:\s*/i, '');    // strip "Doc: " prefix
+    s = s.replace(/,.*$/, '').trim();  // strip ", location/date" suffix
+    return s.toLowerCase();
+  }
+
   return html.replace(/\[([^\]<>\n]{1,120})\]/g, (match, name) => {
-    const entry = fileMap[name];
+    if (/^Web:/i.test(name.trim())) return match; // leave [Web: ...] as plain text
+    const key   = normName(name);
+    const entry = fileMap[key];
     if (!entry) return match;
-    const num = entry.idx + 1;
-    const safePath = (entry.path || '').replace(/"/g, '&quot;');
-    const safeFile = (entry.file || '').replace(/"/g, '&quot;');
-    const safeName = name.replace(/"/g, '&quot;');
+    const num       = entry.idx + 1;
+    const safePath  = (entry.path || '').replace(/"/g, '&quot;');
+    const safeFile  = (entry.file || '').replace(/"/g, '&quot;');
+    const safeTitle = (entry.file || name).replace(/"/g, '&quot;');
     if (entry.path) {
-      return `<sup class="cite-ref" data-src-path="${safePath}" data-src-file="${safeFile}" title="${safeName}">${num}</sup>`;
+      return `<sup class="cite-ref" data-src-path="${safePath}" data-src-file="${safeFile}" title="${safeTitle}">[${num}]</sup>`;
     }
-    return `<sup class="cite-ref" title="${safeName}">${num}</sup>`;
+    return `<sup class="cite-ref" title="${safeTitle}">[${num}]</sup>`;
   });
 }
 
