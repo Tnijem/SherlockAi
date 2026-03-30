@@ -1804,12 +1804,30 @@ async function triggerReindex() {
   btn.textContent = 'Re-indexing…';
   try {
     const { job_id } = await api('POST', '/api/admin/reindex');
-    toast('Re-index started. This may take a while for large NAS volumes.');
-    pollReindex(job_id, btn);
+    toast('Re-index started.');
+    pollIndexerStatus();  // force banner refresh immediately
+    pollReindex(job_id, btn, '↺ Re-index NAS');
   } catch (e) {
     btn.disabled = false;
     btn.textContent = '↺ Re-index NAS';
     toast('Reindex failed: ' + e.message, 'error');
+  }
+}
+
+async function triggerFullReindex() {
+  if (!confirm('This will delete the entire existing index and re-index all files from scratch.\n\nAre you sure?')) return;
+  const btn = document.getElementById('fullReindexBtn');
+  btn.disabled = true;
+  btn.textContent = 'Wiping & Re-indexing…';
+  try {
+    const { job_id } = await api('POST', '/api/admin/reindex/full');
+    toast('Full re-index started — existing index cleared.');
+    pollIndexerStatus();  // force banner refresh immediately
+    pollReindex(job_id, btn, '🗑 Full Re-index (clear existing)');
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '🗑 Full Re-index (clear existing)';
+    toast('Full reindex failed: ' + e.message, 'error');
   }
 }
 
@@ -1821,26 +1839,32 @@ async function resumeActiveReindex() {
     if (!btn) return;
     btn.disabled = true;
     btn.textContent = `Indexing… (${s.indexed || 0} indexed, ${s.skipped || 0} skipped)`;
-    pollReindex(s.job_id, btn);
+    pollReindex(s.job_id, btn, '↺ Re-index NAS');
   } catch { /* ignore */ }
 }
 
-function pollReindex(jobId, btn) {
+function pollReindex(jobId, btn, resetLabel) {
+  // Also drive the banner at 2s intervals while job is active
+  const bannerInterval = setInterval(pollIndexerStatus, 2000);
   const interval = setInterval(async () => {
     try {
       const s = await api('GET', `/api/admin/reindex/${jobId}/status`);
-      btn.textContent = `Indexing… (${s.indexed} indexed, ${s.skipped} skipped, ${s.errors} errors)`;
+      const stageLabel = { scanning: 'Scanning', extracting: 'Extracting', embedding: 'Embedding' }[s.stage] || 'Indexing';
+      btn.textContent = `${stageLabel}… (${s.indexed} indexed, ${s.skipped} skipped, ${s.errors} errors)`;
       if (s.done) {
         clearInterval(interval);
+        clearInterval(bannerInterval);
+        pollIndexerStatus();  // final banner update (hides it)
         btn.disabled = false;
-        btn.textContent = '↺ Re-index NAS';
-        toast(`Re-index complete: ${s.indexed} files indexed, ${s.skipped} unchanged.`, 'success');
+        btn.textContent = resetLabel;
+        toast(`Re-index complete: ${s.indexed} indexed, ${s.skipped} unchanged.`, 'success');
         loadSystemStatus();
       }
     } catch {
       clearInterval(interval);
+      clearInterval(bannerInterval);
       btn.disabled = false;
-      btn.textContent = '↺ Re-index NAS';
+      btn.textContent = resetLabel;
     }
   }, 3000);
 }

@@ -1772,6 +1772,43 @@ def admin_reindex(
     return {"job_id": job_id}
 
 
+@app.post("/api/admin/reindex/full")
+def admin_reindex_full(
+    admin: User = Depends(auth.require_admin),
+    db: Session = Depends(get_db),
+):
+    """Wipe global ChromaDB collection, FTS5, and indexed_files, then re-index from scratch."""
+    import sqlite3 as _sqlite3
+    from config import DB_PATH, NAS_PATHS
+    from rag import _chroma_client, get_or_create_collection
+    from models import IndexedFile
+
+    # 1. Delete + recreate ChromaDB global collection
+    try:
+        _chroma_client().delete_collection(GLOBAL_COLLECTION)
+    except Exception:
+        pass
+    get_or_create_collection(GLOBAL_COLLECTION)
+
+    # 2. Wipe FTS5 entries for global collection
+    try:
+        fts = _sqlite3.connect(str(DB_PATH))
+        fts.execute("DELETE FROM chunk_fts WHERE collection = ?", (GLOBAL_COLLECTION,))
+        fts.commit()
+        fts.close()
+    except Exception:
+        pass
+
+    # 3. Wipe indexed_files for global (case_id IS NULL) entries only
+    db.query(IndexedFile).filter(IndexedFile.case_id.is_(None)).delete()
+    db.commit()
+
+    audit("reindex_full", user_id=admin.id, username=admin.username,
+          detail=f"Full wipe + reindex triggered ({len(NAS_PATHS)} paths)")
+    job_id = idx.start_nas_index(NAS_PATHS)
+    return {"job_id": job_id}
+
+
 @app.get("/api/indexer/live-status")
 def indexer_live_status(current_user: User = Depends(auth.get_current_user)):
     """Live indexer status readable by any logged-in user, from any process."""

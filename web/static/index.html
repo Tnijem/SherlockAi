@@ -231,6 +231,7 @@
             <div class="stat-grid" id="statGrid"></div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
               <button class="btn" onclick="triggerReindex()" id="reindexBtn">&#8635; Re-index NAS</button>
+              <button class="btn btn-danger-sm" onclick="triggerFullReindex()" id="fullReindexBtn">&#128465; Full Re-index (clear existing)</button>
               <button class="btn" onclick="checkForUpdate()" id="checkUpdateBtn">&#8635; Check for Update</button>
               <button class="btn btn-primary-sm hidden" onclick="applyUpdate()" id="upgradeNowBtn">&#8593; Upgrade Now</button>
               <button class="btn hidden" onclick="scheduleUpdate('03:00')" id="upgrade3amBtn">&#9200; Upgrade at 3am</button>
