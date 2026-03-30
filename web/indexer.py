@@ -534,6 +534,7 @@ def start_case_index(case_id: int, nas_path: str) -> str:
                 except Exception as e:
                     errors += 1
                     log.error("Error indexing %s (case %d): %s", fp, case_id, e)
+                    db.rollback()  # reset session so next file can proceed
                 _update_job(job_id, indexed=indexed, skipped=skipped, errors=errors)
 
             # Update case record with index timestamp and count
@@ -598,6 +599,7 @@ def start_nas_index(nas_paths: list[str]) -> str:
                     except Exception as e:
                         errors += 1
                         log.error("Error indexing %s: %s", fp, e)
+                        db.rollback()  # reset session so next file can proceed
                     _update_job(job_id, indexed=indexed, skipped=skipped, errors=errors)
 
             _update_job(job_id, status="done", done=True)
