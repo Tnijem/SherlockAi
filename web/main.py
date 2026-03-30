@@ -1791,6 +1791,17 @@ def indexer_live_status(current_user: User = Depends(auth.get_current_user)):
     return {"active": False}
 
 
+@app.post("/api/admin/reindex/{job_id}/cancel")
+def admin_cancel_reindex(
+    job_id: str,
+    _: User = Depends(auth.require_admin),
+):
+    ok = idx.cancel_job(job_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"cancelled": True, "job_id": job_id}
+
+
 @app.get("/api/admin/reindex/active")
 def admin_reindex_active(_: User = Depends(auth.require_admin)):
     """Return the most recent running reindex job, if any."""
