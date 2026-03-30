@@ -1657,6 +1657,7 @@ async function loadAdmin() {
   loadUsers();
   loadLogs();
   loadUsage(7);
+  loadFilterRules();
   checkForUpdate(true); // silent background check on load
 }
 
@@ -2464,3 +2465,155 @@ function fileIcon(type) {
     }
   });
 })();
+
+// ── Index Filters ─────────────────────────────────────────────────────────────
+
+async function loadFilterRules() {
+  const res = await fetch('/api/admin/filters', { headers: authHeaders() });
+  if (!res.ok) return;
+  const rules = await res.json();
+  const el = document.getElementById('filterRulesList');
+  if (!el) return;
+  if (!rules.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);font-style:italic;">No filter rules defined — all supported files will be indexed.</div>';
+    return;
+  }
+  el.innerHTML = rules.map(r => {
+    const conditions = [];
+    if (r.filename_pattern) conditions.push(`filename matches <code>${r.filename_pattern}</code>`);
+    if (r.created_before)   conditions.push(`created &gt; ${r.created_before} ago`);
+    if (r.created_after)    conditions.push(`created &lt; ${r.created_after} ago`);
+    if (r.modified_before)  conditions.push(`not modified in ${r.modified_before}`);
+    if (r.modified_after)   conditions.push(`modified within ${r.modified_after}`);
+    if (r.size_gt != null)  conditions.push(`size &gt; ${(r.size_gt/1024/1024).toFixed(1)} MB`);
+    if (r.size_lt != null)  conditions.push(`size &lt; ${(r.size_lt/1024/1024).toFixed(1)} MB`);
+    const badge = r.action === 'exclude'
+      ? '<span style="background:#e55;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;text-transform:uppercase;">Exclude</span>'
+      : '<span style="background:#3a8;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;text-transform:uppercase;">Include</span>';
+    const enabledToggle = r.enabled
+      ? `<button class="btn btn-sm" onclick="toggleFilter('${r.id}',false)" style="font-size:10px;padding:1px 6px;">Disable</button>`
+      : `<button class="btn btn-primary-sm" onclick="toggleFilter('${r.id}',true)" style="font-size:10px;padding:1px 6px;opacity:0.6;">Enable</button>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surface2);border-radius:5px;margin-bottom:6px;${r.enabled ? '' : 'opacity:0.5;'}">
+      ${badge}
+      <span style="font-size:12px;font-weight:600;flex:1;">${r.name}</span>
+      <span style="font-size:11px;color:var(--text-muted);">${conditions.join(' &amp; ') || '(no conditions set)'}</span>
+      ${enabledToggle}
+      <button class="btn btn-sm" onclick="editFilter(${JSON.stringify(r).replace(/"/g,'&quot;')})" style="font-size:10px;padding:1px 6px;">Edit</button>
+      <button class="btn btn-sm" onclick="deleteFilter('${r.id}')" style="font-size:10px;padding:1px 6px;color:#e55;">Delete</button>
+    </div>`;
+  }).join('');
+}
+
+function showFilterForm(rule) {
+  document.getElementById('filterForm').style.display = 'block';
+  document.getElementById('fError').style.display = 'none';
+  document.getElementById('fPreviewResult').textContent = '';
+  if (!rule) {
+    ['fEditId','fName','fFilename','fCreatedBefore','fCreatedAfter','fModifiedBefore','fModifiedAfter'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('fAction').value = 'exclude';
+  }
+}
+
+function hideFilterForm() {
+  document.getElementById('filterForm').style.display = 'none';
+}
+
+function editFilter(rule) {
+  showFilterForm(rule);
+  document.getElementById('fEditId').value = rule.id || '';
+  document.getElementById('fName').value = rule.name || '';
+  document.getElementById('fAction').value = rule.action || 'exclude';
+  document.getElementById('fFilename').value = rule.filename_pattern || '';
+  document.getElementById('fCreatedBefore').value = rule.created_before || '';
+  document.getElementById('fCreatedAfter').value = rule.created_after || '';
+  document.getElementById('fModifiedBefore').value = rule.modified_before || '';
+  document.getElementById('fModifiedAfter').value = rule.modified_after || '';
+}
+
+function _buildFilterPayload() {
+  const p = {
+    name:    document.getElementById('fName').value.trim(),
+    action:  document.getElementById('fAction').value,
+  };
+  const add = (key, id) => { const v = document.getElementById(id).value.trim(); if (v) p[key] = v; };
+  add('filename_pattern', 'fFilename');
+  add('created_before',   'fCreatedBefore');
+  add('created_after',    'fCreatedAfter');
+  add('modified_before',  'fModifiedBefore');
+  add('modified_after',   'fModifiedAfter');
+  return p;
+}
+
+async function saveFilterRule() {
+  const payload = _buildFilterPayload();
+  if (!payload.name) { document.getElementById('fError').textContent = 'Name is required.'; document.getElementById('fError').style.display='block'; return; }
+  const editId = document.getElementById('fEditId').value;
+  const url    = editId ? `/api/admin/filters/${editId}` : '/api/admin/filters';
+  const method = editId ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    document.getElementById('fError').textContent = err.detail || 'Save failed.';
+    document.getElementById('fError').style.display = 'block';
+    return;
+  }
+  hideFilterForm();
+  loadFilterRules();
+}
+
+async function deleteFilter(id) {
+  if (!confirm('Delete this filter rule?')) return;
+  await fetch(`/api/admin/filters/${id}`, { method: 'DELETE', headers: authHeaders() });
+  loadFilterRules();
+}
+
+async function toggleFilter(id, enabled) {
+  await fetch(`/api/admin/filters/${id}`, {
+    method: 'PUT',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  loadFilterRules();
+}
+
+async function previewFilterRule() {
+  const payload = _buildFilterPayload();
+  const btn = document.getElementById('fPreviewBtn');
+  const out = document.getElementById('fPreviewResult');
+  btn.disabled = true;
+  out.textContent = 'Scanning...';
+  const res = await fetch('/api/admin/filters/preview', {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rule: payload, paths: [] }),
+  });
+  btn.disabled = false;
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    out.textContent = '⚠ ' + (err.detail || 'Preview failed.');
+    return;
+  }
+  const d = await res.json();
+  out.textContent = `${d.total_files} files scanned → ${d.would_exclude} would be excluded, ${d.would_keep} kept${d.example_files.length ? ' (e.g. ' + d.example_files.slice(0,3).join(', ') + ')' : ''}`;
+}
+
+// Load filters when admin panel opens
+const _origLoadAdmin = typeof loadAdmin === 'function' ? loadAdmin : null;
+document.addEventListener('DOMContentLoaded', () => {
+  const adminTab = document.querySelector('[onclick*="showAdmin"], [onclick*="admin"]');
+});
+
+// Hook into admin section load
+const _filterObserver = new MutationObserver(() => {
+  const el = document.getElementById('filterRulesList');
+  if (el && el.innerHTML === '') loadFilterRules();
+});
+document.addEventListener('DOMContentLoaded', () => {
+  const target = document.getElementById('filtersSection');
+  if (target) _filterObserver.observe(target, { attributes: true, attributeFilter: ['style'] });
+});
+
+// Also load on admin panel display
+const _origShowSection = window.showAdminSection;

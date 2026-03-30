@@ -701,6 +701,12 @@ def start_case_index(case_id: int, nas_path: str) -> str:
             if fp.is_file() and fp.suffix.lower() in ALL_SUPPORTED
         ]
 
+        # Apply index filters
+        from file_filters import get_filter_set as _get_fs
+        file_paths, n_filtered = _get_fs().apply(file_paths)
+        if n_filtered:
+            _update_job(job_id, messages=[f"⚙ {n_filtered} file(s) excluded by index filters"])
+
         indexed, skipped, errors = _run_pipeline(
             file_paths, col_name, job_id,
             source_label_fn=lambda fp: fp.name,
@@ -746,6 +752,12 @@ def start_nas_index(nas_paths: list[str]) -> str:
                 fp for fp in root.rglob("*")
                 if fp.is_file() and fp.suffix.lower() in ALL_SUPPORTED
             )
+
+        # Apply index filters
+        from file_filters import get_filter_set as _get_fs
+        all_files, n_filtered = _get_fs().apply(all_files)
+        if n_filtered:
+            _update_job(job_id, messages=[f"⚙ {n_filtered} file(s) excluded by index filters"])
 
         if not all_files:
             _update_job(job_id, status="done", done=True)

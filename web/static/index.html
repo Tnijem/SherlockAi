@@ -251,6 +251,66 @@
             </table>
           </div>
 
+
+          <div class="admin-section" id="filtersSection">
+            <h3>Index Filters</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px">
+              Rules control which files are indexed. <strong>Exclude</strong> rules skip matching files.
+              <strong>Include</strong> rules act as an override — if a file matches both an exclude and
+              an include rule, it is kept. Conditions within a rule are AND'd.
+            </p>
+            <div id="filterRulesList" style="margin-bottom:10px;"></div>
+            <button class="btn btn-primary-sm" onclick="showFilterForm()">+ Add Filter Rule</button>
+
+            <!-- Add/Edit form (hidden by default) -->
+            <div id="filterForm" style="display:none;margin-top:12px;background:var(--surface2);border-radius:6px;padding:12px;">
+              <input type="hidden" id="fEditId">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                <div style="display:flex;flex-direction:column;gap:3px;grid-column:1/-1">
+                  <label style="font-size:11px;color:var(--text-muted)">Rule name *</label>
+                  <input id="fName" type="text" placeholder="e.g. Old unmodified Word docs" style="font-size:12px;padding:4px 6px;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:3px;">
+                  <label style="font-size:11px;color:var(--text-muted)">Action *</label>
+                  <select id="fAction" style="font-size:12px;padding:4px 6px;">
+                    <option value="exclude">Exclude (skip matching files)</option>
+                    <option value="include">Include (override excludes)</option>
+                  </select>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:3px;">
+                  <label style="font-size:11px;color:var(--text-muted)">Filename pattern (glob)</label>
+                  <input id="fFilename" type="text" placeholder="*.docx  or  temp_*" style="font-size:12px;padding:4px 6px;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:3px;">
+                  <label style="font-size:11px;color:var(--text-muted)">Created before (age)</label>
+                  <input id="fCreatedBefore" type="text" placeholder="4y  /  6m  /  30d" style="font-size:12px;padding:4px 6px;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:3px;">
+                  <label style="font-size:11px;color:var(--text-muted)">Created after (age)</label>
+                  <input id="fCreatedAfter" type="text" placeholder="1y" style="font-size:12px;padding:4px 6px;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:3px;">
+                  <label style="font-size:11px;color:var(--text-muted)">Not modified in (age)</label>
+                  <input id="fModifiedBefore" type="text" placeholder="2y" style="font-size:12px;padding:4px 6px;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:3px;">
+                  <label style="font-size:11px;color:var(--text-muted)">Modified within (age)</label>
+                  <input id="fModifiedAfter" type="text" placeholder="90d" style="font-size:12px;padding:4px 6px;">
+                </div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+                Age formats: <code>4y</code> = 4 years &nbsp; <code>6m</code> = 6 months &nbsp; <code>30d</code> = 30 days &nbsp; <code>2w</code> = 2 weeks
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="btn btn-primary-sm" onclick="saveFilterRule()">Save Rule</button>
+                <button class="btn btn-sm" onclick="previewFilterRule()" id="fPreviewBtn">Preview Impact</button>
+                <button class="btn btn-sm" onclick="hideFilterForm()">Cancel</button>
+                <span id="fPreviewResult" style="font-size:12px;color:var(--text-muted);"></span>
+              </div>
+              <div id="fError" style="color:#e55;font-size:12px;margin-top:6px;display:none;"></div>
+            </div>
+          </div>
+
           <div class="admin-section" id="courtlistenerSection">
             <h3>CourtListener — Download Cases</h3>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">

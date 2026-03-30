@@ -2893,6 +2893,70 @@ def schedule_update(
     return {"status": "scheduled", "time": time_str, "method": method}
 
 
+
+
+# ── Index Filters ─────────────────────────────────────────────────────────────
+
+import file_filters as _ff
+
+class FilterRuleIn(BaseModel):
+    name:             str
+    enabled:          bool           = True
+    action:           str            = "exclude"
+    filename_pattern: Optional[str]  = None
+    path_pattern:     Optional[str]  = None
+    created_before:   Optional[str]  = None
+    created_after:    Optional[str]  = None
+    modified_before:  Optional[str]  = None
+    modified_after:   Optional[str]  = None
+    size_gt:          Optional[int]  = None
+    size_lt:          Optional[int]  = None
+
+class FilterPreviewIn(BaseModel):
+    rule:  FilterRuleIn
+    paths: list[str] = []
+
+
+@app.get("/api/admin/filters")
+def list_filters(_: User = Depends(auth.require_admin)):
+    return _ff.api_list()
+
+
+@app.post("/api/admin/filters", status_code=201)
+def add_filter(rule: FilterRuleIn, admin: User = Depends(auth.require_admin)):
+    try:
+        result = _ff.api_add(rule.dict(exclude_none=True))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    audit("filter_add", user_id=admin.id, username=admin.username, detail=rule.name)
+    return result
+
+
+@app.put("/api/admin/filters/{rule_id}")
+def update_filter(rule_id: str, updates: FilterRuleIn, admin: User = Depends(auth.require_admin)):
+    result = _ff.api_update(rule_id, updates.dict(exclude_none=True))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Filter rule not found")
+    audit("filter_update", user_id=admin.id, username=admin.username, detail=rule_id)
+    return result
+
+
+@app.delete("/api/admin/filters/{rule_id}", status_code=204)
+def delete_filter(rule_id: str, admin: User = Depends(auth.require_admin)):
+    if not _ff.api_delete(rule_id):
+        raise HTTPException(status_code=404, detail="Filter rule not found")
+    audit("filter_delete", user_id=admin.id, username=admin.username, detail=rule_id)
+
+
+@app.post("/api/admin/filters/preview")
+def preview_filter(body: FilterPreviewIn, _: User = Depends(auth.require_admin)):
+    from config import NAS_PATHS
+    paths = body.paths if body.paths else NAS_PATHS
+    try:
+        return _ff.api_preview(body.rule.dict(exclude_none=True), paths)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
