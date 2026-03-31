@@ -130,12 +130,12 @@ def _keepalive_loop() -> None:
             requests.post(
                 f"{OLLAMA_URL}/api/generate",
                 json={"model": LLM_MODEL, "prompt": "", "keep_alive": "30m"},
-                timeout=120,   # long enough to cold-load the LLM if evicted
+                timeout=600,   # long enough to cold-load the LLM if evicted
             )
             requests.post(
                 f"{OLLAMA_URL}/api/embeddings",
                 json={"model": EMBED_MODEL, "prompt": "keep", "keep_alive": "30m"},
-                timeout=120,   # long enough to cold-load the embed model
+                timeout=600,   # long enough to cold-load the embed model
             )
         except Exception:
             pass
@@ -697,7 +697,7 @@ async def stream_response(
             "options": {"num_predict": 4096},
         },
         stream=True,
-        timeout=120,
+        timeout=600,
     ) as resp:
         resp.raise_for_status()
         first = True
@@ -798,7 +798,7 @@ def extract_deadlines(
             f"{OLLAMA_URL}/api/generate",
             json={"model": LLM_MODEL, "prompt": prompt, "system": system,
                   "stream": False, "options": {"temperature": 0.0, "num_predict": 2048}},
-            timeout=120,
+            timeout=600,
         )
         resp.raise_for_status()
         rj = resp.json()
@@ -845,7 +845,7 @@ def generate_brief(query: str, user_id: int, scope: str = "all") -> dict:
                 f"{OLLAMA_URL}/api/generate",
                 json={"model": LLM_MODEL, "prompt": prompt_text, "system": system_text,
                       "stream": False, "options": {"temperature": 0.05, "num_predict": 1024}},
-                timeout=120,
+                timeout=600,
             )
             resp.raise_for_status()
             rj = resp.json()
