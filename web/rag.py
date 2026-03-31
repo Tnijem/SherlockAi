@@ -64,7 +64,7 @@ def embed_text(text: str) -> list[float]:
     resp = requests.post(
         f"{OLLAMA_URL}/api/embeddings",
         json={"model": EMBED_MODEL, "prompt": text[:8192]},
-        timeout=60,
+        timeout=180,   # cold-load of bge-m3 can take >60s when LLM is resident
     )
     resp.raise_for_status()
     rj = resp.json()
@@ -129,13 +129,13 @@ def _keepalive_loop() -> None:
         try:
             requests.post(
                 f"{OLLAMA_URL}/api/generate",
-                json={"model": LLM_MODEL, "prompt": "", "keep_alive": "10m"},
-                timeout=10,
+                json={"model": LLM_MODEL, "prompt": "", "keep_alive": "30m"},
+                timeout=120,   # long enough to cold-load the LLM if evicted
             )
             requests.post(
                 f"{OLLAMA_URL}/api/embeddings",
-                json={"model": EMBED_MODEL, "prompt": "keep", "keep_alive": "10m"},
-                timeout=10,
+                json={"model": EMBED_MODEL, "prompt": "keep", "keep_alive": "30m"},
+                timeout=120,   # long enough to cold-load the embed model
             )
         except Exception:
             pass
@@ -333,7 +333,7 @@ def retrieve(
                         "source": bm25_r["source"],
                         "path": bm25_r["chunk_id"].rsplit("__chunk_", 1)[0] if "__chunk_" in bm25_r["chunk_id"] else "",
                         "chunk": int(bm25_r["chunk_id"].rsplit("__chunk_", 1)[1]) if "__chunk_" in bm25_r["chunk_id"] else 0,
-                        "score": round(0.4 * bm25_r["bm25_norm"], 4),
+                        "score": round(0.65 * bm25_r["bm25_norm"], 4),
                         "collection": "fts5",
                     })
 
