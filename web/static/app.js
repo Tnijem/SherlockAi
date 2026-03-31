@@ -17,13 +17,14 @@ const state = {
   streaming: false,
   uploadJobs: {},
   csrfToken: null,
+  chatHistory: [],  // last N turns for follow-up rewriting (ungated chat only)
 };
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
 function getCsrfToken() {
   const m = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
-  return m ? decodeURIComponent(m[1]) : (state.csrfToken || '');
+  return m ? decodeURIComponent(m[1]) : (localStorage.getItem('sherlock_csrf_token') || state.csrfToken || '');
 }
 
 async function api(method, path, body = null) {
@@ -702,7 +703,9 @@ async function exportTasksCsv() {
 }
 
 function selectMatter(id) {
+  state.chatHistory = [];
   state.activeMatterId = id;
+  loadMatterFiles(id);
   const matter = state.matters.find(m => m.id === id);
   renderMatters();
 
@@ -1076,12 +1079,13 @@ async function sendMessage(overrideText = null) {
     <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
   </div>`;
   container.appendChild(typingDiv);
-  scrollToBottom();
+  scrollToBottom(true);
 
   try {
     const chatUrl = state.activeMatterId
       ? `/api/matters/${state.activeMatterId}/chat`
       : '/api/chat';
+    if (!state.activeMatterId) state.chatHistory.push({ role: 'user', content: text });
     const resp = await fetch(chatUrl, {
       method: 'POST',
       headers: {
@@ -1095,6 +1099,7 @@ async function sendMessage(overrideText = null) {
         query_type: state.queryType,
         verbosity_role: state.verbosityRole,
         research_mode: state.researchMode,
+        history: state.activeMatterId ? [] : state.chatHistory.slice(-6),
       }),
       signal: state.abortController.signal,
     });
@@ -1156,14 +1161,24 @@ async function sendMessage(overrideText = null) {
     // Final render: convert markdown + linkify citation footnotes
     if (fullText) {
       bubble.innerHTML = linkifyCitations(renderMd(fullText), sources);
+      if (!state.activeMatterId) state.chatHistory.push({ role: 'assistant', content: fullText.slice(0, 600) });
     }
 
+    // Only show sources the LLM actually cited in the response
+    const citedSources = sources.filter(s => {
+      if (!s.file) return false;
+      const name = s.file.toLowerCase();
+      const text = fullText.toLowerCase();
+      // Match [filename] citation in response
+      return text.includes('[' + name) || text.includes(name.replace(/\.[^.]+$/, ''));
+    });
+
     // Add sources + action buttons
-    if (sources.length) {
+    if (citedSources.length) {
       const srcDiv = document.createElement('div');
       srcDiv.className = 'sources-list';
       srcDiv.innerHTML = `<div class="sources-title">Sources</div>` +
-        sources.map((s, i) => renderSourceItem(s, i)).join('');
+        citedSources.map((s, i) => renderSourceItem(s, i)).join('');
       aiDiv.appendChild(srcDiv);
     }
 
@@ -1205,9 +1220,13 @@ function stopChat() {
   }
 }
 
-function scrollToBottom() {
+function scrollToBottom(force = false) {
   const el = document.getElementById('chatMessages');
-  el.scrollTop = el.scrollHeight;
+  // Only auto-scroll if user is near the bottom (within 150px) or forced
+  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+  if (force || nearBottom) {
+    el.scrollTop = el.scrollHeight;
+  }
 }
 
 function copyBubble(btn) {
@@ -1275,18 +1294,29 @@ function chatDrop(e) {
 }
 
 async function _uploadAndQueryFiles(files) {
+  if (files.length > 20) {
+    toast('Maximum 20 files at a time. Please upload in smaller batches.', 'error');
+    return;
+  }
   const names = files.map(f => f.name);
-  toast(`Uploading ${names.length} file${names.length > 1 ? 's' : ''}…`);
+  toast(`Uploading ${names.length} file${names.length > 1 ? 's' : ''}...`);
 
   // Upload all files and collect job IDs
   const jobs = [];
   for (const file of files) {
     const fd = new FormData();
     fd.append('file', file);
+    if (state.activeMatterId) fd.append('matter_id', state.activeMatterId);
+    _addUploadProgress(file.name);
     try {
       const result = await apiUpload('/api/upload', fd);
-      jobs.push({ job_id: result.job_id, filename: result.filename || file.name });
-      toast(`Uploaded ${file.name}, indexing…`);
+      if (result.duplicate) {
+        _updateUploadProgress(file.name, 'Duplicate');
+        toast(`${file.name} already uploaded — skipped`, 'info');
+      } else {
+        jobs.push({ job_id: result.job_id, filename: result.filename || file.name });
+        toast(`Uploaded ${file.name}, indexing...`);
+      }
     } catch (e) {
       toast(`Failed: ${file.name} — ${e.message}`, 'error');
     }
@@ -1310,14 +1340,19 @@ async function _uploadAndQueryFiles(files) {
           const job = jobs.find(j => j.job_id === jid);
           if (status.status !== 'error') {
             indexed.push(job.filename);
+            _updateUploadProgress(job.filename, 'Ready');
             toast(`${job.filename} indexed (${status.indexed} chunks)`, 'success');
           } else {
+            _updateUploadProgress(job.filename, 'Error');
             toast(`Indexing failed for ${job.filename}`, 'error');
           }
         }
       } catch { /* retry next poll */ }
     }
   }
+
+  // Refresh file panel with real data
+  if (state.activeMatterId) loadMatterFiles(state.activeMatterId);
 
   if (!indexed.length) {
     toast('No files were indexed successfully.', 'error');
@@ -1472,6 +1507,10 @@ function onDrop(e) {
 }
 
 async function uploadFiles(files) {
+  if (files.length > 20) {
+    toast('Maximum 20 files at a time. Please upload in smaller batches.', 'error');
+    return;
+  }
   for (const file of files) {
     await uploadSingleFile(file);
   }
@@ -2354,6 +2393,118 @@ function linkifyCitations(html, sources) {
   });
 }
 
+
+// ── Matter Files Panel ────────────────────────────────────────────────────────
+
+async function loadMatterFiles(matterId) {
+  const panel = document.getElementById('matterFilesPanel');
+  const list = document.getElementById('matterFilesList');
+  const count = document.getElementById('matterFileCount');
+  if (!matterId) {
+    panel.classList.add('hidden');
+    return;
+  }
+  try {
+    const files = await api('GET', `/api/matters/${matterId}/files`) || [];
+    count.textContent = files.length;
+    if (files.length === 0) {
+      panel.classList.add('hidden');
+      return;
+    }
+    panel.classList.remove('hidden');
+    list.innerHTML = files.map(f => {
+      const size = f.size_bytes ? (f.size_bytes < 1048576
+        ? (f.size_bytes / 1024).toFixed(0) + ' KB'
+        : (f.size_bytes / 1048576).toFixed(1) + ' MB') : '';
+      const pages = f.page_count ? `${f.page_count}p` : '';
+      const meta = [size, pages].filter(Boolean).join(' / ');
+      const statusCls = f.status || 'pending';
+      const retryBtn = f.status === 'error'
+        ? `<button class="matter-file-retry" onclick="event.stopPropagation(); retryIndex(${f.upload_id})" title="Retry indexing">&#8635;</button>`
+        : '';
+      return `<div class="matter-file-item" title="${escHtml(f.filename)}"
+                   onclick="downloadMatterFile(${f.upload_id}, '${escHtml(f.filename)}')">
+        <span class="matter-file-name">${escHtml(f.filename)}</span>
+        <span class="matter-file-meta">${meta}</span>
+        <span class="matter-file-status ${statusCls}">${statusCls}</span>
+        ${retryBtn}
+        <button class="matter-file-detach" onclick="event.stopPropagation(); detachFile(${matterId}, ${f.upload_id})" title="Remove from task">&times;</button>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    panel.classList.add('hidden');
+  }
+}
+
+function toggleFilesPanel() {
+  const panel = document.getElementById('matterFilesPanel');
+  const btn = panel.querySelector('.matter-files-toggle');
+  panel.classList.toggle('collapsed');
+  btn.textContent = panel.classList.contains('collapsed') ? '\u25BC' : '\u25B2';
+}
+
+
+async function retryIndex(uploadId) {
+  try {
+    const result = await api('POST', `/api/files/${uploadId}/retry`);
+    if (result.job_id) {
+      toast('Retrying indexing...', 'info');
+      // Poll until done
+      const maxWait = 60000;
+      const start = Date.now();
+      while (Date.now() - start < maxWait) {
+        await new Promise(r => setTimeout(r, 2000));
+        const status = await api('GET', `/api/upload/${result.job_id}/status`);
+        if (status.done) {
+          if (status.status === 'error') toast('Retry failed', 'error');
+          else toast('File indexed successfully', 'success');
+          break;
+        }
+      }
+    } else {
+      toast('File already indexed', 'info');
+    }
+  } catch (e) {
+    toast('Retry failed: ' + e.message, 'error');
+  }
+  if (state.activeMatterId) loadMatterFiles(state.activeMatterId);
+}
+
+async function detachFile(matterId, uploadId) {
+  if (!confirm('Remove this file from the task? (The file itself is not deleted.)')) return;
+  await api('DELETE', `/api/matters/${matterId}/files/${uploadId}`);
+  loadMatterFiles(matterId);
+}
+
+function downloadMatterFile(uploadId, filename) {
+  downloadWithAuth(`/api/files/${uploadId}/download`, filename);
+}
+
+function _addUploadProgress(filename) {
+  const panel = document.getElementById('matterFilesPanel');
+  const list = document.getElementById('matterFilesList');
+  panel.classList.remove('hidden');
+  const el = document.createElement('div');
+  el.className = 'matter-file-progress';
+  el.id = `upload-prog-${filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  el.innerHTML = `
+    <span class="matter-file-name">${escHtml(filename)}</span>
+    <div class="progress-bar"><div class="progress-bar-fill"></div></div>
+    <span class="upload-status-text">Uploading...</span>
+  `;
+  list.appendChild(el);
+  const count = document.getElementById('matterFileCount');
+  count.textContent = list.children.length;
+}
+
+function _updateUploadProgress(filename, statusText) {
+  const el = document.getElementById(`upload-prog-${filename.replace(/[^a-zA-Z0-9]/g, '_')}`);
+  if (el) {
+    const txt = el.querySelector('.upload-status-text');
+    if (txt) txt.textContent = statusText;
+  }
+}
+
 function renderSourceItem(s, i) {
   const isWeb = !!s.web;
   const hasPath = !!s.path && !isWeb;
@@ -2381,10 +2532,18 @@ function renderSourceItem(s, i) {
     </span>` : '';
 
   const excerpt = s.excerpt ? `<br><span class="source-excerpt">${escHtml(s.excerpt.substring(0, 150))}…</span>` : '';
+  // Build location label: "Page X", "Pages X-Y", "Lines X-Y", or ""
+  let locLabel = '';
+  if (s.page_start && s.page_start > 0) {
+    locLabel = s.page_start === s.page_end ? `p.${s.page_start}` : `pp.${s.page_start}-${s.page_end}`;
+  } else if (s.line_start && s.line_start > 0) {
+    locLabel = s.line_start === s.line_end ? `ln ${s.line_start}` : `ln ${s.line_start}-${s.line_end}`;
+  }
+  const locBadge = locLabel ? ` <span style="opacity:0.5;font-size:10px;margin-left:4px;">${locLabel}</span>` : '';
   const score = s.score && s.score < 1.0 ? ` <span style="opacity:0.4;font-size:10px;">${Math.round(s.score * 100)}%</span>` : '';
 
   return `<div class="${cls}" ${dataAttrs} ${rowHandler}>
-    <span class="src-badge">${i + 1}</span><strong>${isWeb ? '&#127760; ' : ''}${escHtml(s.file)}</strong>${score}${icon}${actions}${excerpt}
+    <span class="src-badge">${i + 1}</span><strong>${isWeb ? '&#127760; ' : ''}${escHtml(s.file)}</strong>${locBadge}${score}${icon}${actions}${excerpt}
   </div>`;
 }
 

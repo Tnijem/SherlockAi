@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import (
+from sqlalchemy import (UniqueConstraint, 
     Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, event
 )
 from sqlalchemy.orm import DeclarativeBase, Session, relationship, sessionmaker
@@ -25,7 +25,7 @@ def _set_sqlite_pragmas(dbapi_conn, _):
     cur = dbapi_conn.cursor()
     cur.execute("PRAGMA journal_mode=WAL")
     cur.execute("PRAGMA foreign_keys=ON")
-    cur.execute("PRAGMA busy_timeout=5000")  # wait up to 5s on lock contention
+    cur.execute("PRAGMA busy_timeout=10000")  # wait up to 5s on lock contention
     cur.close()
 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -124,6 +124,7 @@ class Matter(Base):
     case     = relationship("Case", back_populates="matters")
     messages = relationship("Message", back_populates="matter", cascade="all, delete-orphan",
                             order_by="Message.created_at")
+    file_links = relationship("MatterFile", back_populates="matter", cascade="all, delete-orphan")
 
 
 # ── Messages ─────────────────────────────────────────────────────────────────
@@ -162,9 +163,26 @@ class Upload(Base):
     status      = Column(String(16), default="pending")  # pending|indexing|ready|error
     error_msg   = Column(Text)
     chroma_ids  = Column(Text)   # JSON array of ChromaDB doc IDs
+    page_count  = Column(Integer)   # number of pages (PDFs only)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="uploads")
+    matter_links = relationship("MatterFile", back_populates="upload", cascade="all, delete-orphan")
+
+
+
+# -- Matter-File junction (associates uploaded files with matters) --
+class MatterFile(Base):
+    __tablename__ = "matter_files"
+    __table_args__ = (UniqueConstraint("matter_id", "upload_id", name="uq_matter_upload"),)
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    matter_id   = Column(Integer, ForeignKey("matters.id"), nullable=False, index=True)
+    upload_id   = Column(Integer, ForeignKey("uploads.id"), nullable=False, index=True)
+    attached_at = Column(DateTime, default=datetime.utcnow)
+
+    matter = relationship("Matter", back_populates="file_links")
+    upload = relationship("Upload", back_populates="matter_links")
 
 
 # ── NAS index state (tracks what's been indexed from NAS mounts) ──────────────
@@ -262,6 +280,14 @@ SYSTEM_USER_ID = 999999
 # ── Create all tables ─────────────────────────────────────────────────────────
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # Migrate: add page_count to uploads if missing
+    import sqlite3 as _sq
+    _conn = _sq.connect(str(engine.url).replace("sqlite:///", ""))
+    _cols = [r[1] for r in _conn.execute("PRAGMA table_info(uploads)").fetchall()]
+    if "page_count" not in _cols:
+        _conn.execute("ALTER TABLE uploads ADD COLUMN page_count INTEGER")
+        _conn.commit()
+    _conn.close()
     # Migrate: add token columns to query_logs if missing
     import sqlite3
     db_path = str(DB_PATH)

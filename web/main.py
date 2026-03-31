@@ -47,7 +47,7 @@ from config import (
     SYSTEM_NAME, UPLOADS_DIR,
 )
 from logging_config import audit, get_logger, request_id_var, setup_logging, tail_log
-from models import Case, Matter, Message, Output, Upload, User, case_collection, get_db, init_db
+from models import Case, Matter, MatterFile, Message, Output, Upload, User, case_collection, get_db, init_db
 
 log     = get_logger("sherlock.web")
 log_app = get_logger("sherlock.app")
@@ -248,7 +248,9 @@ class CSRFEnforcementMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.method in self._STATE_METHODS:
             exempt = any(request.url.path.startswith(p) for p in self._EXEMPT_PREFIXES)
-            if not exempt:
+            # Bearer token auth is immune to CSRF (custom headers can't be set cross-origin)
+            has_bearer = (request.headers.get("authorization") or "").startswith("Bearer ")
+            if not exempt and not has_bearer:
                 cookie_token = request.cookies.get("csrf_token")
                 header_token = request.headers.get("x-csrf-token")
                 if not cookie_token or not header_token or cookie_token != header_token:
@@ -789,6 +791,7 @@ class ChatRequest(BaseModel):
     query_type: str = "auto"      # "auto" | "summary" | "timeline" | "risk" | "drafting" | "compare"
     verbosity_role: str = "attorney"  # "attorney" | "associate" | "paralegal" | "client"
     research_mode: bool = False   # True = include SearXNG web results
+    history: list[dict] | None = None  # conversation history for follow-up rewriting
 
 
 @app.post("/api/matters/{matter_id}/chat")
@@ -858,23 +861,30 @@ async def chat(
         sources_captured = []
         token_stats = {}
 
-        async for chunk in rag.stream_response(
-            body.message, current_user.id, resolved_scope,
-            query_type=body.query_type,
-            verbosity_role=body.verbosity_role,
-            research_mode=body.research_mode,
-            history=chat_history,
-            case_context=case_context,
-        ):
-            if len(chunk) == 3:
-                # Final stats tuple: (token, sources, stats_dict)
-                token_stats = chunk[2]
-                continue
-            token, sources = chunk
-            full_response += token
-            if sources and not sources_captured:
-                sources_captured = sources
-            yield f"data: {json.dumps({'token': token, 'sources': sources})}\n\n"
+        try:
+            async for chunk in rag.stream_response(
+                body.message, current_user.id, resolved_scope,
+                query_type=body.query_type,
+                verbosity_role=body.verbosity_role,
+                research_mode=body.research_mode,
+                history=chat_history,
+                case_context=case_context,
+                matter_id=matter_id,
+            ):
+                if len(chunk) == 3:
+                    # Final stats tuple: (token, sources, stats_dict)
+                    token_stats = chunk[2]
+                    continue
+                token, sources = chunk
+                full_response += token
+                if sources and not sources_captured:
+                    sources_captured = sources
+                yield f"data: {json.dumps({'token': token, 'sources': sources})}\n\n"
+        except Exception as e:
+            err_msg = "⚠ Sherlock timed out waiting for the AI model. The model may be loading or under heavy load — please try again in a moment."
+            yield f"data: {json.dumps({'token': err_msg, 'sources': [], 'error': True})}\n\n"
+            full_response = err_msg
+            log.warning("chat stream error: %s", e)
 
         # Save assistant message
         ai_msg = Message(
@@ -923,17 +933,23 @@ async def chat_ungated(
     """Stateless chat — no Matter required. Streams a response but does not persist messages."""
     async def _generate():
         token_stats = {}
-        async for chunk in rag.stream_response(
-            body.message, current_user.id, body.scope,
-            query_type=body.query_type,
-            verbosity_role=body.verbosity_role,
-            research_mode=body.research_mode,
-        ):
-            if len(chunk) == 3:
-                token_stats = chunk[2]
-                continue
-            token, sources = chunk
-            yield f"data: {json.dumps({'token': token, 'sources': sources})}\n\n"
+        try:
+            async for chunk in rag.stream_response(
+                body.message, current_user.id, body.scope,
+                query_type=body.query_type,
+                verbosity_role=body.verbosity_role,
+                research_mode=body.research_mode,
+                history=body.history or [],
+            ):
+                if len(chunk) == 3:
+                    token_stats = chunk[2]
+                    continue
+                token, sources = chunk
+                yield f"data: {json.dumps({'token': token, 'sources': sources})}\n\n"
+        except Exception as e:
+            err_msg = "⚠ Sherlock timed out waiting for the AI model. The model may be loading or under heavy load — please try again in a moment."
+            yield f"data: {json.dumps({'token': err_msg, 'sources': [], 'error': True})}\n\n"
+            log.warning("chat stream error: %s", e)
         done_payload = {'done': True}
         if token_stats:
             done_payload['token_stats'] = token_stats
@@ -947,6 +963,7 @@ async def chat_ungated(
 @app.post("/api/upload")
 async def upload_file(
     file: UploadFile = File(...),
+    matter_id: int = Form(None),
     current_user: User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -969,6 +986,45 @@ async def upload_file(
         while chunk := await file.read(1 << 20):   # 1 MB chunks
             f.write(chunk)
 
+    # Dedup: check if user already uploaded a file with identical content
+    import hashlib as _hl
+    _h = _hl.sha256()
+    with dest.open("rb") as _f:
+        while _blk := _f.read(1 << 20):
+            _h.update(_blk)
+    content_hash = _h.hexdigest()
+
+    existing_upload = (
+        db.query(Upload)
+        .filter(Upload.user_id == current_user.id, Upload.filename == file.filename)
+        .first()
+    )
+    # Check by hash across all user uploads (catches renamed dupes too)
+    if not existing_upload:
+        from models import IndexedFile
+        existing_indexed = (
+            db.query(Upload)
+            .join(IndexedFile, IndexedFile.file_path == Upload.stored_path)
+            .filter(Upload.user_id == current_user.id, IndexedFile.file_hash == content_hash)
+            .first()
+        )
+        if existing_indexed:
+            existing_upload = existing_indexed
+
+    if existing_upload and existing_upload.status == "ready":
+        # Duplicate — remove the new file, associate existing upload with matter if needed
+        dest.unlink(missing_ok=True)
+        if matter_id:
+            matter = db.query(Matter).filter(Matter.id == matter_id, Matter.user_id == current_user.id).first()
+            if matter:
+                exists = db.query(MatterFile).filter(
+                    MatterFile.matter_id == matter_id, MatterFile.upload_id == existing_upload.id).first()
+                if not exists:
+                    db.add(MatterFile(matter_id=matter_id, upload_id=existing_upload.id))
+                    db.commit()
+        return {"upload_id": existing_upload.id, "job_id": None, "filename": file.filename,
+                "matter_id": matter_id, "duplicate": True}
+
     # Record upload
     upload_record = Upload(
         user_id=current_user.id,
@@ -987,7 +1043,15 @@ async def upload_file(
 
     audit("file_upload", user_id=current_user.id, username=current_user.username,
           file_path=file.filename, file_size=upload_record.size_bytes)
-    return {"upload_id": upload_record.id, "job_id": job_id, "filename": file.filename}
+    # Associate file with matter if specified
+    if matter_id:
+        matter = db.query(Matter).filter(Matter.id == matter_id, Matter.user_id == current_user.id).first()
+        if matter:
+            mf = MatterFile(matter_id=matter_id, upload_id=upload_record.id)
+            db.add(mf)
+            db.commit()
+
+    return {"upload_id": upload_record.id, "job_id": job_id, "filename": file.filename, "matter_id": matter_id}
 
 
 @app.get("/api/upload/{job_id}/status")
@@ -1050,6 +1114,117 @@ def delete_file(
     db.delete(upload)
     db.commit()
     return {"deleted": upload_id}
+
+
+
+
+@app.post("/api/files/{upload_id}/retry")
+def retry_index(
+    upload_id: int,
+    current_user: User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    upload = db.query(Upload).filter(Upload.id == upload_id, Upload.user_id == current_user.id).first()
+    if not upload:
+        raise HTTPException(status_code=404, detail="File not found")
+    if upload.status == "ready" and upload.chroma_ids:
+        return {"status": "already_indexed", "upload_id": upload_id}
+    fp = Path(upload.stored_path)
+    if not fp.exists():
+        raise HTTPException(status_code=404, detail="File no longer exists on disk")
+    upload.status = "pending"
+    upload.error_msg = None
+    db.commit()
+    job_id = idx.start_upload_index(upload.id, current_user.id, fp)
+    return {"upload_id": upload_id, "job_id": job_id, "status": "retrying"}
+
+
+# -- Matter files (file-matter associations) --
+
+@app.get("/api/matters/{matter_id}/files")
+def list_matter_files(
+    matter_id: int,
+    current_user: User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    matter = db.query(Matter).filter(Matter.id == matter_id, Matter.user_id == current_user.id).first()
+    if not matter:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    rows = (
+        db.query(MatterFile, Upload)
+        .join(Upload, Upload.id == MatterFile.upload_id)
+        .filter(MatterFile.matter_id == matter_id)
+        .order_by(MatterFile.attached_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": mf.id,
+            "upload_id": u.id,
+            "filename": u.filename,
+            "file_type": u.file_type,
+            "size_bytes": u.size_bytes,
+            "status": u.status,
+            "page_count": u.page_count,
+            "stored_path": u.stored_path,
+            "uploaded_at": u.uploaded_at.isoformat() if u.uploaded_at else None,
+            "attached_at": mf.attached_at.isoformat() if mf.attached_at else None,
+        }
+        for mf, u in rows
+    ]
+
+
+@app.post("/api/matters/{matter_id}/files/{upload_id}", status_code=201)
+def attach_file_to_matter(
+    matter_id: int,
+    upload_id: int,
+    current_user: User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    matter = db.query(Matter).filter(Matter.id == matter_id, Matter.user_id == current_user.id).first()
+    if not matter:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    upload = db.query(Upload).filter(Upload.id == upload_id, Upload.user_id == current_user.id).first()
+    if not upload:
+        raise HTTPException(status_code=404, detail="File not found")
+    existing = db.query(MatterFile).filter(
+        MatterFile.matter_id == matter_id, MatterFile.upload_id == upload_id).first()
+    if existing:
+        return {"status": "already_attached"}
+    mf = MatterFile(matter_id=matter_id, upload_id=upload_id)
+    db.add(mf)
+    db.commit()
+    return {"status": "attached", "matter_id": matter_id, "upload_id": upload_id}
+
+
+@app.delete("/api/matters/{matter_id}/files/{upload_id}", status_code=204)
+def detach_file_from_matter(
+    matter_id: int,
+    upload_id: int,
+    current_user: User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    matter = db.query(Matter).filter(Matter.id == matter_id, Matter.user_id == current_user.id).first()
+    if not matter:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    mf = db.query(MatterFile).filter(
+        MatterFile.matter_id == matter_id, MatterFile.upload_id == upload_id).first()
+    if mf:
+        db.delete(mf)
+        db.commit()
+
+
+@app.get("/api/files/{upload_id}/download")
+def download_file(
+    upload_id: int,
+    current_user: User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    upload = db.query(Upload).filter(Upload.id == upload_id, Upload.user_id == current_user.id).first()
+    if not upload:
+        raise HTTPException(status_code=404, detail="File not found")
+    from starlette.responses import FileResponse as _FR
+    return _FR(upload.stored_path, filename=upload.filename)
 
 
 # ── Audio ─────────────────────────────────────────────────────────────────────

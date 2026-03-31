@@ -45,6 +45,25 @@ log = get_logger("sherlock.indexer")
 
 # ── Tuning constants ──────────────────────────────────────────────────────────
 
+
+# ── Upload indexing queue (serialized to avoid SQLite lock contention) ─────────
+import queue as _queue
+
+_upload_queue: _queue.Queue = _queue.Queue()
+
+def _upload_queue_worker():
+    """Process upload indexing jobs one at a time."""
+    while True:
+        fn = _upload_queue.get()
+        try:
+            fn()
+        except Exception as e:
+            log.error("upload_queue_worker error: %s", e)
+        finally:
+            _upload_queue.task_done()
+
+threading.Thread(target=_upload_queue_worker, daemon=True, name="upload-index-queue").start()
+
 CHUNK_SIZE        = 1200   # chars per chunk (~300 tokens)
 CHUNK_OVERLAP     = 200    # overlap between adjacent chunks
 EMBED_BATCH_SIZE  = 32     # max chunks per /api/embed call (memory cap for bge-m3)
@@ -71,15 +90,77 @@ ALL_SUPPORTED = (
 
 # ── Chunking ──────────────────────────────────────────────────────────────────
 
-def chunk_text(text: str) -> list[str]:
+def chunk_text(text: str) -> list[dict]:
+    """Split text into chunks with location metadata.
+
+    Returns list of dicts: {text, page_start, page_end, line_start, line_end}.
+    Page info is extracted from \x00PAGE:N\x00 markers inserted by _extract_pdf.
+    Line numbers are computed from character offsets in the original text.
+    """
+    import re as _re
     text = text.strip()
     if not text:
         return []
-    chunks, start = [], 0
-    while start < len(text):
-        chunks.append(text[start:start + CHUNK_SIZE])
+
+    # Build page boundary map from markers
+    page_map: list[tuple[int, int]] = []  # (char_offset, page_num)
+    for m in _re.finditer(r'\x00PAGE:(\d+)\x00\n?', text):
+        page_map.append((m.start(), int(m.group(1))))
+
+    # Strip page markers from text (they shouldn't appear in embeddings)
+    clean = _re.sub(r'\x00PAGE:\d+\x00\n?', '', text)
+
+    # Build a line-number lookup: for any char offset, what line is it on?
+    line_offsets = [0]
+    for i, ch in enumerate(clean):
+        if ch == '\n':
+            line_offsets.append(i + 1)
+
+    def _char_to_line(offset: int) -> int:
+        import bisect
+        idx = bisect.bisect_right(line_offsets, offset) - 1
+        return max(1, idx + 1)
+
+    # Adjust page_map offsets to account for removed markers
+    adjusted_pages: list[tuple[int, int]] = []
+    removed = 0
+    marker_spans = list(_re.finditer(r'\x00PAGE:\d+\x00\n?', text))
+    for ms in marker_spans:
+        adjusted_pages.append((ms.start() - removed, int(_re.search(r'\d+', ms.group()).group())))
+        removed += ms.end() - ms.start()
+
+    def _char_to_page(offset: int) -> int:
+        if not adjusted_pages:
+            return 0  # not a PDF
+        page = 0
+        for po, pn in adjusted_pages:
+            if po <= offset:
+                page = pn
+            else:
+                break
+        return page
+
+    # Chunk the clean text
+    chunks = []
+    start = 0
+    while start < len(clean):
+        end = min(start + CHUNK_SIZE, len(clean))
+        chunk_text_str = clean[start:end]
+        if chunk_text_str.strip():
+            ps = _char_to_page(start)
+            pe = _char_to_page(end - 1) if end > start else ps
+            ls = _char_to_line(start)
+            le = _char_to_line(end - 1) if end > start else ls
+            chunks.append({
+                "text": chunk_text_str,
+                "page_start": ps,
+                "page_end": pe,
+                "line_start": ls,
+                "line_end": le,
+            })
         start += CHUNK_SIZE - CHUNK_OVERLAP
-    return [c for c in chunks if c.strip()]
+
+    return chunks
 
 
 # ── Text extraction ───────────────────────────────────────────────────────────
@@ -121,7 +202,7 @@ def _extract_pdf(fp: Path) -> str:
     from pypdf import PdfReader
     reader = PdfReader(str(fp))
     parts = []
-    for page in reader.pages:
+    for i, page in enumerate(reader.pages, 1):
         text = page.extract_text() or ""
         if not text.strip():
             try:
@@ -132,7 +213,8 @@ def _extract_pdf(fp: Path) -> str:
                     text += pytesseract.image_to_string(img) + "\n"
             except Exception:
                 pass
-        parts.append(text)
+        # Insert lightweight page marker (stripped before embedding)
+        parts.append(f"\x00PAGE:{i}\x00\n{text}")
     return "\n".join(parts)
 
 
@@ -419,9 +501,11 @@ def _extract_worker(
         log.debug("No text extracted from %s", fp)
         return None
 
-    chunks = chunk_text(text)
-    if not chunks:
+    chunk_dicts = chunk_text(text)
+    if not chunk_dicts:
         return None
+    chunks = [c["text"] for c in chunk_dicts]
+    chunk_locations = chunk_dicts
 
     # For updates: how many old chunks existed (to detect shrinkage)
     old_chunk_count = 0
@@ -436,6 +520,7 @@ def _extract_worker(
     return {
         "fp":         fp,
         "chunks":     chunks,
+        "chunk_locations": chunk_locations,
         "label":      source_label,
         "fhash":      fhash,
         "fmtime":     fmtime,
@@ -491,9 +576,14 @@ def _flush_batch(
         col        = result["collection"]
 
         doc_ids = [f"{fp}__chunk_{i}" for i in range(len(chunks))]
+        locations = result.get("chunk_locations", [])
         metas   = [
             {"source": label, "path": str(fp), "chunk": i,
-             "total_chunks": len(chunks), "ext": ext}
+             "total_chunks": len(chunks), "ext": ext,
+             "page_start": locations[i]["page_start"] if i < len(locations) else 0,
+             "page_end":   locations[i]["page_end"]   if i < len(locations) else 0,
+             "line_start": locations[i]["line_start"] if i < len(locations) else 0,
+             "line_end":   locations[i]["line_end"]   if i < len(locations) else 0}
             for i in range(len(chunks))
         ]
 
@@ -520,6 +610,7 @@ def _flush_batch(
                 " VALUES (?,?,?,?)",
                 [(did, col, label, txt) for did, txt in zip(doc_ids, chunks)],
             )
+            fts_conn.commit()  # commit FTS per-file to release DB lock before SQLAlchemy writes
         except Exception as e:
             log.warning("FTS5 upsert failed for %s: %s", fp, e)
 
@@ -555,7 +646,7 @@ def _flush_batch(
 
         flushed += 1
 
-    fts_conn.commit()
+    # fts already committed per-file above
     return flushed
 
 
@@ -578,7 +669,7 @@ def _run_pipeline(
     from rag import get_or_create_collection
 
     coll     = get_or_create_collection(collection_name)
-    fts_conn = _sqlite3.connect(str(DB_PATH))
+    fts_conn = _sqlite3.connect(str(DB_PATH)); fts_conn.execute("PRAGMA busy_timeout=10000")
     write_db = SessionLocal()
 
     indexed = skipped = errors = 0
@@ -817,7 +908,7 @@ def start_upload_index(upload_id: int, user_id: int, filepath: Path) -> str:
             _update_job(job_id, stage="embedding")
             from rag import get_or_create_collection
             coll     = get_or_create_collection(col_name)
-            fts_conn = _sqlite3.connect(str(DB_PATH))
+            fts_conn = _sqlite3.connect(str(DB_PATH)); fts_conn.execute("PRAGMA busy_timeout=10000")
             write_db = SessionLocal()
             try:
                 n = _flush_batch([result], coll, fts_conn, write_db)
@@ -827,6 +918,13 @@ def start_upload_index(upload_id: int, user_id: int, filepath: Path) -> str:
 
             chunk_ids    = [f"{filepath}__chunk_{i}" for i in range(len(result["chunks"]))]
             upload.chroma_ids = json.dumps(chunk_ids)
+            # Extract page count for PDFs
+            if filepath.suffix.lower() == ".pdf":
+                try:
+                    from pypdf import PdfReader as _PR
+                    upload.page_count = len(_PR(str(filepath)).pages)
+                except Exception:
+                    pass
             upload.status = "ready" if n else "error"
             if not n:
                 upload.error_msg = "Embedding or upsert failed."
@@ -850,5 +948,5 @@ def start_upload_index(upload_id: int, user_id: int, filepath: Path) -> str:
         finally:
             db.close()
 
-    threading.Thread(target=_run, daemon=True, name=f"index-upload-{upload_id}").start()
+    _upload_queue.put(_run)
     return job_id

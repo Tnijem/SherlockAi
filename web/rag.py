@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 from functools import lru_cache
@@ -24,6 +25,7 @@ SEARXNG_URL = "http://localhost:8888"
 # Minimum cosine-similarity score for a chunk to be passed to the LLM.
 # Chunks below this are too dissimilar to be useful and increase hallucination risk.
 MIN_SCORE_THRESHOLD = 0.30
+MIN_SOURCE_DISPLAY_SCORE = 0.40  # chunks below this score are used for LLM context but not shown as sources
 
 # ── ChromaDB client (persistent singleton) ────────────────────────────────────
 
@@ -287,6 +289,10 @@ def retrieve(
                     "source":     meta.get("source", meta.get("path", "unknown")),
                     "path":       meta.get("path", ""),
                     "chunk":      meta.get("chunk", 0),
+                    "page_start": meta.get("page_start", 0),
+                    "page_end":   meta.get("page_end", 0),
+                    "line_start": meta.get("line_start", 0),
+                    "line_end":   meta.get("line_end", 0),
                     "score":      round(1 - dist, 4),
                     "collection": coll.name,
                 })
@@ -340,6 +346,136 @@ def retrieve(
             results.sort(key=lambda x: x["score"], reverse=True)
 
     return results[:n]
+
+
+
+# ── Matter-scoped retrieval ──────────────────────────────────────────────
+
+def retrieve_matter_chunks(
+    query: str,
+    user_id: int,
+    matter_id: int,
+    scope: str = "all",
+    n: int = RAG_TOP_N,
+) -> list[dict]:
+    """
+    Retrieve chunks with guaranteed coverage of every file in the matter.
+
+    Two-pass approach:
+      1. Standard similarity retrieval (same as retrieve())
+      2. For any matter file NOT represented in pass-1 results,
+         fetch the single best chunk for that file.
+
+    This ensures cross-file synthesis queries (e.g. "total by provider")
+    always have context from every attached document.
+    """
+    import json as _json
+    from models import SessionLocal, MatterFile, Upload
+
+    # ── Get all chroma_ids grouped by upload for this matter ──
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(Upload.id, Upload.filename, Upload.chroma_ids)
+            .join(MatterFile, MatterFile.upload_id == Upload.id)
+            .filter(MatterFile.matter_id == matter_id, Upload.status == "ready")
+            .all()
+        )
+    finally:
+        db.close()
+
+    if not rows:
+        # No files attached — fall back to standard retrieval
+        return retrieve(query, user_id, scope, n)
+
+    # Build map: upload_id -> {filename, chroma_ids set}
+    file_map: dict[int, dict] = {}
+    all_chunk_ids: list[str] = []
+    for uid, fname, cids_json in rows:
+        if not cids_json:
+            continue
+        try:
+            cids = _json.loads(cids_json)
+        except Exception:
+            continue
+        file_map[uid] = {"filename": fname, "chunk_ids": set(cids)}
+        all_chunk_ids.extend(cids)
+
+    if not all_chunk_ids:
+        return retrieve(query, user_id, scope, n)
+
+    # ── Pass 1: standard similarity search ──
+    pass1 = retrieve(query, user_id, scope, n=n)
+
+    # Track which matter files are already represented
+    matter_chunk_set = set(all_chunk_ids)
+    represented_files: set[int] = set()
+
+    for chunk in pass1:
+        # Check if this chunk belongs to a matter file
+        chunk_path = chunk.get("path", "")
+        for uid, info in file_map.items():
+            # Match by checking if any of the file's chunk IDs share the same path prefix
+            if any(chunk_path and cid.startswith(str(chunk_path)) for cid in info["chunk_ids"]):
+                represented_files.add(uid)
+                break
+
+    # ── Pass 2: fill gaps — fetch best chunk per missing file ──
+    missing_uids = set(file_map.keys()) - represented_files
+    if not missing_uids:
+        return pass1  # All files already represented
+
+    log.info("matter_fill_gaps: %d/%d files missing from pass-1, fetching",
+             len(missing_uids), len(file_map))
+
+    embedding = embed_query(query)
+    col_name = f"user_{user_id}_docs"
+    try:
+        client = _chroma_client()
+        coll = client.get_collection(col_name)
+    except Exception:
+        return pass1
+
+    for uid in missing_uids:
+        info = file_map[uid]
+        chunk_ids = list(info["chunk_ids"])
+        if not chunk_ids:
+            continue
+        try:
+            # Fetch all chunks for this file and find the best match
+            res = coll.get(
+                ids=chunk_ids,
+                include=["documents", "metadatas"],
+            )
+            if not res["documents"]:
+                continue
+            # Embed and score each chunk to find best match
+            # (cheaper: just include all chunks, let the LLM sort it out)
+            # Include up to 2 chunks per missing file
+            best_chunks = []
+            for doc, meta in zip(res["documents"], res["metadatas"]):
+                best_chunks.append({
+                    "text":       doc,
+                    "source":     meta.get("source", info["filename"]),
+                    "path":       meta.get("path", ""),
+                    "chunk":      meta.get("chunk", 0),
+                    "page_start": meta.get("page_start", 0),
+                    "page_end":   meta.get("page_end", 0),
+                    "line_start": meta.get("line_start", 0),
+                    "line_end":   meta.get("line_end", 0),
+                    "score":      0.35,  # synthetic score (below display but above threshold)
+                    "collection": col_name,
+                    "matter_fill": True,  # flag for debugging
+                })
+            # Keep at most 2 chunks per file (first + last tend to have summary/total info)
+            if len(best_chunks) > 2:
+                best_chunks = [best_chunks[0], best_chunks[-1]]
+            pass1.extend(best_chunks)
+        except Exception as e:
+            log.warning("matter_fill_gap_error uid=%d: %s", uid, e)
+            continue
+
+    return pass1
 
 
 # ── Web search (SearXNG) ──────────────────────────────────────────────────────
@@ -569,7 +705,16 @@ def _build_prompt(
 
     fence = "═" * 60
     doc_text = "\n\n---\n\n".join(
-        f"[Doc: {c['source']} | Chunk {c['chunk']} | Relevance: {c['score']}]\n{c['text']}"
+        "[Doc: {src} | {loc} | Relevance: {score}]\n{txt}".format(
+            src=c["source"],
+            loc=("Page " + (str(c["page_start"]) if c["page_start"] == c["page_end"] else f"{c['page_start']}-{c['page_end']}"))
+                if c.get("page_start") else
+                ("Lines " + (str(c["line_start"]) if c["line_start"] == c["line_end"] else f"{c['line_start']}-{c['line_end']}"))
+                if c.get("line_start") else
+                f"Chunk {c['chunk']}",
+            score=c["score"],
+            txt=c["text"],
+        )
         for c in context_chunks
     )
 
@@ -598,6 +743,80 @@ def _build_prompt(
 
 # ── LLM streaming ─────────────────────────────────────────────────────────────
 
+
+# ── Conversational query rewriter ─────────────────────────────────────────────
+
+_FOLLOWUP_SIGNALS = re.compile(
+    r"\b(he|she|they|them|his|her|their|it|its|"
+    r"the (judge|plaintiff|defendant|attorney|lawyer|court|case|"
+    r"party|parties|contract|agreement|ruling|decision|amount|"
+    r"date|filing|settlement|verdict|claim|motion|order|"
+    r"document|file|report))\b",
+    re.IGNORECASE,
+)
+
+def _is_followup(query: str, history: list[dict] | None) -> bool:
+    """Return True if query is likely a contextual follow-up that needs rewriting."""
+    if not history:
+        return False
+    q = query.strip()
+    # Short queries are almost always follow-ups
+    if len(q.split()) <= 6:
+        return True
+    # Contains pronouns or references that imply prior context
+    if _FOLLOWUP_SIGNALS.search(q):
+        return True
+    return False
+
+
+def _rewrite_query(query: str, history: list[dict]) -> str:
+    """
+    Use a fast LLM call to rewrite a follow-up question into a self-contained
+    search query, using the last 3 conversation turns as context.
+    Returns the rewritten query, or the original if rewrite fails.
+    """
+    # Build a compact history string (last 3 turns max)
+    recent = history[-3:] if len(history) > 3 else history
+    hist_lines = []
+    for msg in recent:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            content = " ".join(p.get("text", "") for p in content if isinstance(p, dict))
+        content = str(content)[:400]
+        if role == "user":
+            hist_lines.append(f"User: {content}")
+        elif role == "assistant":
+            hist_lines.append(f"Assistant: {content[:200]}")
+
+    hist_text = "\n".join(hist_lines)
+    prompt = (
+        f"Given this conversation:\n{hist_text}\n\n"
+        f"Rewrite this follow-up question as a fully self-contained search query "
+        f"(no pronouns, no references to \'the case\' without naming it). "
+        f"Output ONLY the rewritten query — no explanation, no quotes.\n\n"
+        f"Follow-up: {query}\nRewritten:"
+    )
+    try:
+        resp = requests.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={
+                "model": LLM_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"temperature": 0.0, "num_predict": 60},
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        rewritten = resp.json().get("response", "").strip().strip('"\'\' ')
+        if rewritten and len(rewritten) > 4:
+            log.info("query_rewritten original=%r rewritten=%r", query[:80], rewritten[:80])
+            return rewritten
+    except Exception as e:
+        log.warning("query_rewrite_failed: %s", e)
+    return query
+
 async def stream_response(
     query: str,
     user_id: int,
@@ -607,6 +826,7 @@ async def stream_response(
     research_mode: bool = False,
     history: list[dict] | None = None,
     case_context: dict | None = None,
+    matter_id: int | None = None,
 ) -> AsyncIterator[tuple]:
     """
     Yields (token, sources) tuples during streaming.
@@ -614,9 +834,17 @@ async def stream_response(
     """
     t_total = time.perf_counter()
 
+    # Rewrite follow-up queries into self-contained search queries
+    search_query = query
+    if history and _is_followup(query, history):
+        search_query = _rewrite_query(query, history)
+
     # Retrieve doc chunks
     t_retrieve = time.perf_counter()
-    raw_chunks = retrieve(query, user_id, scope)
+    if matter_id:
+        raw_chunks = retrieve_matter_chunks(search_query, user_id, matter_id, scope)
+    else:
+        raw_chunks = retrieve(search_query, user_id, scope)
     ms_retrieve = _ms(t_retrieve)
 
     # ── Score threshold: drop chunks too dissimilar to be useful ──────────────
@@ -646,15 +874,20 @@ async def stream_response(
     prompt = _build_prompt(query, chunks, web_results if research_mode else None, history=history, top_score=top_score)
     system_prompt = _build_system_prompt(query_type, verbosity_role, research_mode, case_context=case_context)
 
-    sources = [
-        {
-            "file":    c["source"],
-            "path":    c.get("path", ""),
-            "excerpt": c["text"][:200],
-            "score":   c["score"],
-        }
-        for c in chunks
-    ]
+    # Deduplicate: one entry per unique file, highest-scoring chunk wins
+    _seen_sources: dict[str, dict] = {}
+    for c in chunks:
+        if c["score"] < MIN_SOURCE_DISPLAY_SCORE:
+            continue
+        key = c["source"].lower()
+        if key not in _seen_sources or c["score"] > _seen_sources[key]["score"]:
+            _seen_sources[key] = {
+                "file":    c["source"],
+                "path":    c.get("path", ""),
+                "excerpt": c["text"][:200],
+                "score":   c["score"],
+            }
+    sources = sorted(_seen_sources.values(), key=lambda x: x["score"], reverse=True)
 
     # Add web sources (score=1.0 marks them as web results)
     for r in web_results:
@@ -937,15 +1170,20 @@ def query_sync(
         user_id=user_id,
     )
 
-    sources = [
-        {
-            "file":    c["source"],
-            "path":    c.get("path", ""),
-            "excerpt": c["text"][:200],
-            "score":   c["score"],
-        }
-        for c in chunks
-    ]
+    # Deduplicate: one entry per unique file, highest-scoring chunk wins
+    _seen_sources: dict[str, dict] = {}
+    for c in chunks:
+        if c["score"] < MIN_SOURCE_DISPLAY_SCORE:
+            continue
+        key = c["source"].lower()
+        if key not in _seen_sources or c["score"] > _seen_sources[key]["score"]:
+            _seen_sources[key] = {
+                "file":    c["source"],
+                "path":    c.get("path", ""),
+                "excerpt": c["text"][:200],
+                "score":   c["score"],
+            }
+    sources = sorted(_seen_sources.values(), key=lambda x: x["score"], reverse=True)
     for r in web_results:
         sources.append({
             "file":    r["title"] or r["url"],

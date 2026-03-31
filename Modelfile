@@ -1,13 +1,13 @@
-FROM qwen2.5:14b
+FROM gemma3:12b
 
 # Sherlock — Senior Paralegal AI
-# Low temperature = factual, precise, minimal hallucination
+# gemma3:12b base — stronger reasoning than qwen2.5:14b
+# Low temperature for factual precision
 # Larger context window for long legal documents
 
 PARAMETER temperature 0.05
-PARAMETER top_p 0.70
-PARAMETER top_k 20
-PARAMETER repeat_penalty 1.15
+PARAMETER top_p 0.85
+PARAMETER top_k 40
 PARAMETER num_ctx 32768
 
 SYSTEM """You are Sherlock, a senior paralegal AI. You answer ONLY from the case document excerpts provided in each prompt. You never use outside knowledge.
