@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sherlock</title>
   <link rel="icon" type="image/svg+xml" id="favicon" href="/static/favicon-formal.svg">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=4">
 </head>
 <body>
 
@@ -250,7 +250,63 @@
             <div class="update-notes hidden" id="updateNotes"></div>
           </div>
 
-          <div class="admin-section">
+
+          <div class="admin-section" id="catalogSection">
+            <h3>NAS Catalog</h3>
+            <div id="catalogStatus" class="catalog-status">Loading...</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+              <button class="btn" onclick="triggerCatalogScan(false)" id="catalogScanBtn">&#8635; Incremental Scan</button>
+              <button class="btn btn-danger-sm" onclick="triggerCatalogScan(true)" id="catalogFullScanBtn">&#128465; Full Rescan</button>
+            </div>
+            <div style="margin-top:14px;">
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="text" id="catalogSearchInput" placeholder="Search filenames..." style="flex:1;font-size:12px;padding:5px 8px;">
+                <select id="catalogClientFilter" style="font-size:12px;padding:5px;max-width:200px;">
+                  <option value="">All Clients</option>
+                </select>
+                <select id="catalogCategoryFilter" style="font-size:12px;padding:5px;">
+                  <option value="">All Types</option>
+                  <option value="INJURY">Injury</option>
+                  <option value="CRIMINAL">Criminal</option>
+                  <option value="FAMILY">Family</option>
+                  <option value="CIVIL">Civil</option>
+                  <option value="CORPORATE">Corporate</option>
+                  <option value="REAL_ESTATE">Real Estate</option>
+                  <option value="UNCATEGORIZED">Other</option>
+                </select>
+                <button class="btn btn-primary-sm" onclick="searchCatalog()">Search</button>
+              </div>
+              <div id="catalogResults" class="catalog-results" style="margin-top:10px;display:none;"></div>
+            </div>
+          </div>
+
+          
+          <div class="admin-section" id="textSection">
+            <h3>Full-Text Search (Tier 2)</h3>
+            <div id="textStatus" class="catalog-status">Loading...</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:10px;">
+              <button class="btn" onclick="triggerTextExtract()" id="textExtractBtn">&#8635; Extract Text</button>
+            </div>
+            <div style="margin-top:14px;">
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="text" id="textSearchInput" placeholder="Search file contents..." style="flex:1;font-size:12px;padding:5px 8px;">
+                <button class="btn btn-primary-sm" onclick="searchFullText()">Search</button>
+              </div>
+              <div id="textResults" class="catalog-results" style="margin-top:10px;display:none;"></div>
+            </div>
+          </div>
+
+
+          <div class="admin-section" id="embedSection">
+            <h3>Smart Embedding (Tier 3)</h3>
+            <div id="embedStatus" class="catalog-status">Loading...</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:10px;">
+              <button class="btn" onclick="triggerEmbed(200)" id="embedBtn">&#9889; Embed Top 200</button>
+              <button class="btn" onclick="triggerEmbed(500)">&#9889; Embed 500</button>
+            </div>
+          </div>
+
+<div class="admin-section">
             <h3>Users <button class="btn" style="font-size:11px;padding:4px 10px;" onclick="openNewUserModal()">+ New User</button></h3>
             <table class="user-table" id="userTable">
               <thead>
@@ -697,7 +753,7 @@
   </div>
 </div>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=4"></script>
 
 <!-- NAS Folder Browser Modal -->
 <div class="modal-overlay hidden" id="nasBrowserModal">

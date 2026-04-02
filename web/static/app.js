@@ -1737,6 +1737,9 @@ async function loadAdmin() {
   loadLogs();
   loadUsage(7);
   loadFilterRules();
+  loadCatalogStatus();
+  loadTextStatus();
+  loadEmbedStatus();
   checkForUpdate(true); // silent background check on load
 }
 
@@ -2775,12 +2778,18 @@ async function saveFilterRule() {
   }
   hideFilterForm();
   loadFilterRules();
+  loadCatalogStatus();
+  loadTextStatus();
+  loadEmbedStatus();
 }
 
 async function deleteFilter(id) {
   if (!confirm('Delete this filter rule?')) return;
   await fetch(`/api/admin/filters/${id}`, { method: 'DELETE', headers: authHeaders() });
   loadFilterRules();
+  loadCatalogStatus();
+  loadTextStatus();
+  loadEmbedStatus();
 }
 
 async function toggleFilter(id, enabled) {
@@ -2790,6 +2799,9 @@ async function toggleFilter(id, enabled) {
     body: JSON.stringify({ enabled }),
   });
   loadFilterRules();
+  loadCatalogStatus();
+  loadTextStatus();
+  loadEmbedStatus();
 }
 
 async function previewFilterRule() {
@@ -2823,6 +2835,9 @@ document.addEventListener('DOMContentLoaded', () => {
 const _filterObserver = new MutationObserver(() => {
   const el = document.getElementById('filterRulesList');
   if (el && el.innerHTML === '') loadFilterRules();
+  loadCatalogStatus();
+  loadTextStatus();
+  loadEmbedStatus();
 });
 document.addEventListener('DOMContentLoaded', () => {
   const target = document.getElementById('filtersSection');
@@ -2882,5 +2897,313 @@ function selectNasFolder() {
     document.getElementById(state._nasBrowserTarget).value = path;
   }
   closeModal('nasBrowserModal');
+}
+
+
+
+// ── NAS Catalog ───────────────────────────────────────────────────────────────
+
+let _catalogPoller = null;
+
+async function loadCatalogStatus() {
+  try {
+    const s = await api('GET', '/api/catalog/status');
+    const stats = await api('GET', '/api/catalog/stats');
+    const el = document.getElementById('catalogStatus');
+    if (!el) return;
+
+    const totalFiles = stats.total_files ? stats.total_files.toLocaleString() : '0';
+    const totalSize = stats.total_size_bytes ? formatBytes(stats.total_size_bytes) : '0 B';
+    const clients = stats.unique_clients || 0;
+
+    let statusHtml = `
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-value">${totalFiles}</div><div class="stat-label">Files Cataloged</div></div>
+        <div class="stat-card"><div class="stat-value">${totalSize}</div><div class="stat-label">Total Size</div></div>
+        <div class="stat-card"><div class="stat-value">${clients}</div><div class="stat-label">Client Folders</div></div>
+      </div>
+    `;
+
+    if (s.active) {
+      const found = (s.total_found || 0).toLocaleString();
+      const inserted = (s.total_inserted || 0).toLocaleString();
+      const skipped = (s.total_skipped || 0).toLocaleString();
+      const elapsed = s.elapsed_s ? Math.round(s.elapsed_s) + 's' : '';
+      statusHtml += `
+        <div class="catalog-scan-progress">
+          <span class="scan-badge active">&#9679; Scanning</span>
+          <span class="muted" style="font-size:12px;">
+            Stage: ${s.stage} &bull; Found: ${found} &bull; New: ${inserted} &bull; Skipped: ${skipped} ${elapsed ? '&bull; ' + elapsed : ''}
+          </span>
+        </div>
+      `;
+      // Poll while active
+      if (!_catalogPoller) {
+        _catalogPoller = setInterval(loadCatalogStatus, 5000);
+      }
+    } else {
+      if (_catalogPoller) { clearInterval(_catalogPoller); _catalogPoller = null; }
+    }
+
+    el.innerHTML = statusHtml;
+
+    // Populate client dropdown
+    if (stats.by_category) {
+      loadCatalogClients();
+    }
+  } catch (e) {
+    const el = document.getElementById('catalogStatus');
+    if (el) el.innerHTML = '<span class="muted">Catalog not available</span>';
+  }
+}
+
+async function loadCatalogClients() {
+  try {
+    const clients = await api('GET', '/api/catalog/clients?limit=500');
+    const sel = document.getElementById('catalogClientFilter');
+    if (!sel || !clients.clients) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All Clients</option>' +
+      clients.clients.map(c =>
+        `<option value="${escHtml(c.client_folder)}">${escHtml(c.client_folder)} (${c.file_count})</option>`
+      ).join('');
+    sel.value = current;
+  } catch (e) { /* silent */ }
+}
+
+async function triggerCatalogScan(full) {
+  const btn = full ? document.getElementById('catalogFullScanBtn')
+                   : document.getElementById('catalogScanBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; }
+  try {
+    await api('POST', `/api/catalog/scan?incremental=${!full}`);
+    toast(full ? 'Full catalog rescan started' : 'Incremental catalog scan started');
+    // Start polling
+    if (!_catalogPoller) {
+      _catalogPoller = setInterval(loadCatalogStatus, 5000);
+    }
+    setTimeout(loadCatalogStatus, 1000);
+  } catch (e) {
+    toast('Catalog scan failed: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = full ? '\ud83d\uddd1 Full Rescan' : '\u21bb Incremental Scan'; }
+  }
+}
+
+async function searchCatalog() {
+  const q = document.getElementById('catalogSearchInput').value.trim();
+  const client = document.getElementById('catalogClientFilter').value;
+  const category = document.getElementById('catalogCategoryFilter').value;
+  const el = document.getElementById('catalogResults');
+  if (!el) return;
+
+  if (!q && !client && !category) {
+    el.style.display = 'none';
+    return;
+  }
+
+  el.style.display = 'block';
+  el.innerHTML = '<span class="muted">Searching...</span>';
+
+  try {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (client) params.set('client', client);
+    if (category) params.set('category', category);
+    params.set('limit', '50');
+
+    const data = await api('GET', `/api/catalog/search?${params}`);
+    if (!data.results || data.results.length === 0) {
+      el.innerHTML = '<span class="muted">No files found</span>';
+      return;
+    }
+
+    el.innerHTML = `
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">${data.total} results${data.total > 50 ? ' (showing first 50)' : ''}</div>
+      <table class="catalog-table">
+        <thead>
+          <tr><th>Filename</th><th>Client</th><th>Type</th><th>Size</th><th>Modified</th></tr>
+        </thead>
+        <tbody>
+          ${data.results.map(r => `
+            <tr title="${escHtml(r.file_path)}">
+              <td class="catalog-filename">${escHtml(r.filename)}</td>
+              <td class="muted">${escHtml(r.client_folder || '—')}</td>
+              <td><span class="tag">${escHtml(r.extension || '?')}</span></td>
+              <td class="muted">${formatBytes(r.size_bytes)}</td>
+              <td class="muted">${r.mtime_date || '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    el.innerHTML = `<span class="error">Search failed: ${escHtml(e.message)}</span>`;
+  }
+}
+
+// formatBytes defined above
+
+
+// Catalog search on Enter key
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('catalogSearchInput');
+  if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') searchCatalog(); });
+});
+
+
+// ── Full-Text Search (Tier 2) ────────────────────────────────────────────────
+
+let _textPoller = null;
+
+async function loadTextStatus() {
+  try {
+    const s = await api('GET', '/api/text/status');
+    const stats = await api('GET', '/api/text/stats');
+    const el = document.getElementById('textStatus');
+    if (!el) return;
+
+    const total = stats.total_files ? stats.total_files.toLocaleString() : '0';
+    const ok = (stats.by_status && stats.by_status.ok) || 0;
+    const charsMB = stats.total_chars_mb || 0;
+
+    let statusHtml = `<div class="stat-grid">
+      <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Files Processed</div></div>
+      <div class="stat-card"><div class="stat-value">${ok.toLocaleString()}</div><div class="stat-label">Text Extracted</div></div>
+      <div class="stat-card"><div class="stat-value">${charsMB} MB</div><div class="stat-label">Text Content</div></div>
+    </div>`;
+
+    if (s.active) {
+      const pct = s.total_queued > 0 ? Math.round((s.processed / s.total_queued) * 100) : 0;
+      statusHtml += `<div class="catalog-scan-progress">
+        <span class="scan-badge active">&#9679; Extracting</span>
+        <span class="muted" style="font-size:12px;">
+          ${pct}% (${s.processed.toLocaleString()}/${s.total_queued.toLocaleString()})
+          &bull; OK: ${s.extracted_ok} &bull; Empty: ${s.extracted_empty} &bull; Errors: ${s.errors}
+          ${s.current_file ? '&bull; ' + s.current_file : ''}
+        </span>
+      </div>`;
+      if (!_textPoller) _textPoller = setInterval(loadTextStatus, 5000);
+    } else {
+      if (_textPoller) { clearInterval(_textPoller); _textPoller = null; }
+    }
+
+    el.innerHTML = statusHtml;
+  } catch (e) {
+    const el = document.getElementById('textStatus');
+    if (el) el.innerHTML = '<span class="muted">Text extraction not available</span>';
+  }
+}
+
+async function triggerTextExtract() {
+  const btn = document.getElementById('textExtractBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; }
+  try {
+    await api('POST', '/api/text/extract');
+    toast('Text extraction started');
+    if (!_textPoller) _textPoller = setInterval(loadTextStatus, 5000);
+    setTimeout(loadTextStatus, 1000);
+  } catch (e) {
+    toast('Text extraction failed: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '\u21bb Extract Text'; }
+  }
+}
+
+async function searchFullText() {
+  const q = document.getElementById('textSearchInput').value.trim();
+  const el = document.getElementById('textResults');
+  if (!el || !q) { if (el) el.style.display = 'none'; return; }
+
+  el.style.display = 'block';
+  el.innerHTML = '<span class="muted">Searching...</span>';
+
+  try {
+    const data = await api('GET', '/api/text/search?q=' + encodeURIComponent(q) + '&limit=30');
+    if (!data.results || data.results.length === 0) {
+      el.innerHTML = '<span class="muted">No results found</span>';
+      return;
+    }
+
+    el.innerHTML = `
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">${data.total} results${data.total > 30 ? ' (showing first 30)' : ''}</div>
+      <div class="text-results-list">
+        ${data.results.map(r => `
+          <div class="text-result-item">
+            <div class="text-result-filename">${escHtml(r.filename || r.file_path)}
+              <span class="tag">${escHtml(r.extension || '')}</span>
+              ${r.client_folder ? '<span class="muted">' + escHtml(r.client_folder) + '</span>' : ''}
+            </div>
+            <div class="text-result-snippet">${r.snippet || ''}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (e) {
+    el.innerHTML = '<span class="error">Search failed: ' + escHtml(e.message) + '</span>';
+  }
+}
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('textSearchInput');
+  if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') searchFullText(); });
+});
+
+
+// ── Smart Embedding (Tier 3) ─────────────────────────────────────────────────
+
+let _embedPoller = null;
+
+async function loadEmbedStatus() {
+  try {
+    const s = await api('GET', '/api/embed/status');
+    const stats = await api('GET', '/api/embed/stats');
+    const el = document.getElementById('embedStatus');
+    if (!el) return;
+
+    const embeddable = stats.embeddable_files ? stats.embeddable_files.toLocaleString() : '0';
+    const embedded = stats.already_embedded ? stats.already_embedded.toLocaleString() : '0';
+
+    let statusHtml = `<div class="stat-grid">
+      <div class="stat-card"><div class="stat-value">${embeddable}</div><div class="stat-label">Embeddable Files</div></div>
+      <div class="stat-card"><div class="stat-value">${embedded}</div><div class="stat-label">Already Embedded</div></div>
+    </div>`;
+
+    if (s.active) {
+      const pct = s.total_queued > 0 ? Math.round((s.processed / s.total_queued) * 100) : 0;
+      statusHtml += `<div class="catalog-scan-progress">
+        <span class="scan-badge active">&#9679; Embedding</span>
+        <span class="muted" style="font-size:12px;">
+          ${pct}% (${s.processed}/${s.total_queued})
+          &bull; OK: ${s.embedded_ok} &bull; Skip: ${s.skipped} &bull; Err: ${s.errors}
+          ${s.current_file ? '&bull; ' + s.current_file : ''}
+        </span>
+      </div>`;
+      if (!_embedPoller) _embedPoller = setInterval(loadEmbedStatus, 5000);
+    } else {
+      if (_embedPoller) { clearInterval(_embedPoller); _embedPoller = null; }
+    }
+
+    el.innerHTML = statusHtml;
+  } catch (e) {
+    const el = document.getElementById('embedStatus');
+    if (el) el.innerHTML = '<span class="muted">Embedding not available</span>';
+  }
+}
+
+async function triggerEmbed(limit) {
+  const btn = document.getElementById('embedBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; }
+  try {
+    await api('POST', `/api/embed/start?limit=${limit}`);
+    toast(`Embedding started (up to ${limit} files)`);
+    if (!_embedPoller) _embedPoller = setInterval(loadEmbedStatus, 5000);
+    setTimeout(loadEmbedStatus, 2000);
+  } catch (e) {
+    toast('Embedding failed: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '\u26a1 Embed Top 200'; }
+  }
 }
 

@@ -42,6 +42,9 @@ import file_watcher as watcher_mod
 import indexer as idx
 import outputs as out_mod
 import rag
+import nas_catalog
+import nas_text
+import nas_embed
 from config import (
     GLOBAL_COLLECTION, MAX_UPLOAD_MB, NAS_PATHS, OUTPUTS_DIR,
     SYSTEM_NAME, UPLOADS_DIR,
@@ -143,8 +146,40 @@ async def lifespan(app: FastAPI):
             log_app.warning(f"Embed warmup failed: {e}")
     _threading.Thread(target=_warmup, daemon=True, name="embed-warmup").start()
 
-    # Start file watcher (auto re-index on NAS changes)
-    watcher_mod.start_watcher()
+    # Start file watcher in background (recursive NAS watch can block on large shares)
+    def _boot_watcher():
+        try:
+            watcher_mod.start_watcher()
+        except Exception as e:
+            log_app.error("watcher_boot_error: %s", e)
+    _threading.Thread(target=_boot_watcher, daemon=True, name="watcher-boot").start()
+
+    # Initialize NAS catalog and start incremental scan (fully background)
+    def _boot_catalog():
+        try:
+            nas_catalog.init_catalog()
+            nas_text.init_text_db()
+            log_app.info("NAS catalog + text DB initialized")
+            # Start catalog scan (may take a while over SMB)
+            nas_catalog.start_catalog_scan(incremental=True)
+            log_app.info("Catalog scan complete, triggering text extraction refresh")
+            nas_text.start_text_extraction()
+        except Exception as e:
+            log_app.error("catalog_boot_error: %s", e)
+
+    def _boot_text():
+        import time as _t
+        # Wait a few seconds for text DB to init, then start on existing catalog
+        _t.sleep(5)
+        try:
+            log_app.info("Starting Tier 2 text extraction on existing catalog")
+            nas_text.start_text_extraction()
+        except Exception as e:
+            log_app.error("text_boot_error: %s", e)
+
+    _threading.Thread(target=_boot_catalog, daemon=True, name="catalog-boot").start()
+    _threading.Thread(target=_boot_text, daemon=True, name="text-boot").start()
+    log_app.info("NAS catalog + text boot threads launched")
 
     yield
 
@@ -3188,6 +3223,115 @@ def preview_filter(body: FilterPreviewIn, _: User = Depends(auth.require_admin))
         return _ff.api_preview(body.rule.dict(exclude_none=True), paths)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+
+# ── NAS Catalog (Tier 1: metadata search) ────────────────────────────────────
+
+@app.post("/api/catalog/scan")
+def catalog_scan(
+    incremental: bool = True,
+    _admin: User = Depends(auth.require_admin),
+):
+    """Start a NAS catalog scan (admin only). Incremental by default."""
+    return nas_catalog.start_catalog_scan(incremental=incremental)
+
+
+@app.get("/api/catalog/status")
+def catalog_status(current_user: User = Depends(auth.get_current_user)):
+    """Get current catalog scan status."""
+    return nas_catalog.get_scan_status()
+
+
+@app.get("/api/catalog/search")
+def catalog_search(
+    q: str = "",
+    client: str = "",
+    category: str = "",
+    extension: str = "",
+    limit: int = Query(50, le=200),
+    offset: int = 0,
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Search the NAS file catalog by filename, client, category, or extension."""
+    return nas_catalog.search_catalog(
+        query=q, client=client, category=category,
+        extension=extension, limit=limit, offset=offset,
+    )
+
+
+@app.get("/api/catalog/stats")
+def catalog_stats(current_user: User = Depends(auth.get_current_user)):
+    """Get catalog summary statistics."""
+    return nas_catalog.get_catalog_stats()
+
+
+@app.get("/api/catalog/clients")
+def catalog_clients(
+    category: str = "",
+    limit: int = Query(500, le=2000),
+    current_user: User = Depends(auth.get_current_user),
+):
+    """List client folders with file counts."""
+    return {"clients": nas_catalog.get_client_list(category=category, limit=limit)}
+
+
+# ── NAS Text Extraction (Tier 2: full-text search) ───────────────────────────
+
+@app.post("/api/text/extract")
+def text_extract(_admin: User = Depends(auth.require_admin)):
+    """Start background text extraction (admin only)."""
+    return nas_text.start_text_extraction()
+
+
+@app.get("/api/text/status")
+def text_status(current_user: User = Depends(auth.get_current_user)):
+    """Get text extraction status."""
+    return nas_text.get_extract_status()
+
+
+@app.get("/api/text/search")
+def text_search(
+    q: str = "",
+    client: str = "",
+    extension: str = "",
+    limit: int = Query(30, le=100),
+    offset: int = 0,
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Full-text search across extracted NAS file content."""
+    if not q:
+        raise HTTPException(status_code=422, detail="Query parameter 'q' is required")
+    return nas_text.search_text(query=q, client=client, extension=extension,
+                                limit=limit, offset=offset)
+
+
+@app.get("/api/text/stats")
+def text_stats(current_user: User = Depends(auth.get_current_user)):
+    """Get text extraction statistics."""
+    return nas_text.get_text_stats()
+
+
+# ── NAS Smart Embedding (Tier 3: semantic search) ────────────────────────────
+
+@app.post("/api/embed/start")
+def embed_start(
+    limit: int = Query(200, le=1000),
+    _admin: User = Depends(auth.require_admin),
+):
+    """Start background NAS file embedding (admin only)."""
+    return nas_embed.start_embedding(limit=limit)
+
+
+@app.get("/api/embed/status")
+def embed_status(current_user: User = Depends(auth.get_current_user)):
+    """Get embedding status."""
+    return nas_embed.get_embed_status()
+
+
+@app.get("/api/embed/stats")
+def embed_stats(current_user: User = Depends(auth.get_current_user)):
+    """Get embedding statistics."""
+    return nas_embed.get_embed_stats()
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 

@@ -2794,3 +2794,52 @@ sup.cite-ref:hover { background: var(--gold-light); }
 .nas-folder-icon {
   font-size: 15px;
 }
+
+
+/* ── NAS Catalog ─────────────────────────────────────────────────────────── */
+.catalog-status { margin-top: 8px; }
+.catalog-scan-progress {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 10px; padding: 8px 12px;
+  background: var(--surface2); border-radius: 6px;
+}
+.scan-badge {
+  font-size: 11px; font-weight: 600; padding: 2px 8px;
+  border-radius: 10px; white-space: nowrap;
+}
+.scan-badge.active {
+  background: rgba(59, 130, 246, 0.15); color: #3b82f6;
+  animation: pulse-badge 2s infinite;
+}
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.catalog-results { max-height: 400px; overflow-y: auto; }
+.catalog-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+.catalog-table th {
+  text-align: left; padding: 6px 8px; font-size: 11px;
+  color: var(--text-muted); border-bottom: 1px solid var(--border);
+}
+.catalog-table td {
+  padding: 5px 8px; border-bottom: 1px solid var(--border);
+}
+.catalog-table tr:hover { background: var(--surface2); }
+.catalog-filename {
+  max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── Text Search Results ─────────────────────────────────────────────────── */
+.text-results-list { display: flex; flex-direction: column; gap: 8px; }
+.text-result-item {
+  padding: 8px 10px; background: var(--surface2);
+  border-radius: 6px; border-left: 3px solid var(--accent);
+}
+.text-result-filename { font-size: 12px; font-weight: 500; margin-bottom: 4px; }
+.text-result-snippet {
+  font-size: 11px; color: var(--text-muted); line-height: 1.4;
+  max-height: 60px; overflow: hidden;
+}
+.text-result-snippet b { color: var(--text); font-weight: 600; }

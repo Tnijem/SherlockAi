@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
@@ -16,6 +17,13 @@ from config import (
     CHROMA_URL, EMBED_MODEL, GLOBAL_COLLECTION, LLM_MODEL,
     OLLAMA_URL, RAG_TOP_N, user_collection,
 )
+try:
+    import nas_text
+    import nas_catalog
+    _HAS_NAS_SEARCH = True
+except ImportError:
+    _HAS_NAS_SEARCH = False
+
 from logging_config import get_logger
 
 log = get_logger("sherlock.rag")
@@ -870,6 +878,61 @@ def _rewrite_query(query: str, history: list[dict]) -> str:
         log.warning("query_rewrite_failed: %s", e)
     return query
 
+
+
+# ── NAS Catalog + FTS fallback search ─────────────────────────────────────────
+
+def _nas_fallback_search(query: str, limit: int = 10) -> list[dict]:
+    """
+    Search NAS catalog metadata + full-text content when ChromaDB has no results.
+    Returns list of dicts with file info and text snippets.
+    """
+    if not _HAS_NAS_SEARCH:
+        return []
+
+    results = []
+    seen_paths = set()
+
+    # 1. Full-text content search (Tier 2)
+    try:
+        fts = nas_text.search_text(query=query, limit=limit)
+        for r in fts.get("results", []):
+            fp = r.get("file_path", "")
+            if fp in seen_paths:
+                continue
+            seen_paths.add(fp)
+            results.append({
+                "source": r.get("filename", os.path.basename(fp)),
+                "path": fp,
+                "text": r.get("snippet", "").replace("<b>", "**").replace("</b>", "**"),
+                "score": 0.40,  # Below embedding threshold but shows as "NAS search"
+                "collection": "nas_fts",
+                "nas_search": True,
+            })
+    except Exception as e:
+        log.warning("nas_fts_search_error: %s", e)
+
+    # 2. Catalog filename search (Tier 1) — catch files not yet text-extracted
+    try:
+        cat = nas_catalog.search_catalog(query=query, limit=limit)
+        for r in cat.get("results", []):
+            fp = r.get("file_path", "")
+            if fp in seen_paths:
+                continue
+            seen_paths.add(fp)
+            results.append({
+                "source": r.get("filename", os.path.basename(fp)),
+                "path": fp,
+                "text": f"[NAS file: {r.get('filename', '')} | Client: {r.get('client_folder', '?')} | Type: {r.get('extension', '?')} | Modified: {r.get('mtime_date', '?')}]",
+                "score": 0.35,
+                "collection": "nas_catalog",
+                "nas_search": True,
+            })
+    except Exception as e:
+        log.warning("nas_catalog_search_error: %s", e)
+
+    return results[:limit]
+
 async def stream_response(
     query: str,
     user_id: int,
@@ -904,20 +967,37 @@ async def stream_response(
     chunks = [c for c in raw_chunks if c["score"] >= MIN_SCORE_THRESHOLD]
     top_score = chunks[0]["score"] if chunks else 0.0
 
-    # ── No-context guard: refuse to call the LLM with no relevant material ────
+    # ── No-context guard: fall back to NAS catalog/FTS search ────────────────
     if not chunks and not research_mode:
-        log.warning(
-            "rag_no_context",
-            extra={
-                "user_id": user_id,
-                "query": query[:120],
-                "scope": scope,
-                "raw_chunks": len(raw_chunks),
-                "top_raw_score": raw_chunks[0]["score"] if raw_chunks else 0.0,
-            },
-        )
-        yield (_NO_CONTEXT_MSG, [])
-        return
+        # Try NAS full-text + catalog search as fallback
+        nas_results = _nas_fallback_search(search_query, limit=15)
+        if nas_results:
+            log.info("rag_nas_fallback: %d NAS results for query", len(nas_results))
+            chunks = nas_results  # Use NAS results as context
+        else:
+            log.warning(
+                "rag_no_context",
+                extra={
+                    "user_id": user_id,
+                    "query": query[:120],
+                    "scope": scope,
+                    "raw_chunks": len(raw_chunks),
+                    "top_raw_score": raw_chunks[0]["score"] if raw_chunks else 0.0,
+                },
+            )
+            yield (_NO_CONTEXT_MSG, [])
+            return
+
+    # ── Supplement sparse ChromaDB results with NAS search ──────────────────
+    if len(chunks) < 3 and not research_mode:
+        nas_extra = _nas_fallback_search(search_query, limit=8)
+        existing_paths = {c.get("path", "") for c in chunks}
+        for nr in nas_extra:
+            if nr["path"] not in existing_paths:
+                chunks.append(nr)
+                existing_paths.add(nr["path"])
+        if nas_extra:
+            log.info("rag_nas_supplement: added %d NAS results to sparse ChromaDB", len(nas_extra))
 
     # Optionally fetch web results
     web_results: list[dict] = []
