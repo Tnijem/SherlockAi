@@ -151,6 +151,7 @@ def _get_pending_files(limit: int = 50000) -> list[tuple[str, str, int]]:
           AND c.extension IN ({placeholders})
           AND c.size_bytes <= ?
           AND c.size_bytes > 0
+          AND c.filename NOT LIKE '~$%'
         ORDER BY
             CASE
                 WHEN c.extension IN ('.txt','.csv','.tsv','.log','.md','.json','.xml','.html','.htm') THEN 1

@@ -110,6 +110,27 @@ class FileWatcher:
                 log.warning("watcher_skip_missing: %s (not mounted?)", path_str)
                 continue
 
+            # Skip SMB/NFS-mounted paths -- FSEvents hangs on large network shares.
+            # NAS indexing is handled by the three-tier system (catalog/text/embed).
+            import subprocess
+            try:
+                mounts = subprocess.check_output(['mount'], text=True)
+                is_network = False
+                for ml in mounts.strip().splitlines():
+                    if ' on ' not in ml:
+                        continue
+                    if 'smbfs' not in ml and 'nfs' not in ml:
+                        continue
+                    mount_point = ml.split(' on ')[1].split(' (')[0]
+                    if str(nas).startswith(mount_point):
+                        is_network = True
+                        break
+                if is_network:
+                    log.info("watcher_skip_smb: %s (network mount)", path_str)
+                    continue
+            except Exception:
+                pass
+
             handler = _DebounceHandler(
                 callback=lambda: start_nas_index(NAS_PATHS),
                 label=nas.name,

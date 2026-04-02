@@ -216,6 +216,9 @@ def _scan_nas_paths(nas_paths: list[str], incremental: bool = True):
             for fname in filenames:
                 if fname.startswith('.') or fname == 'Thumbs.db' or fname == 'AUTORUN.INF':
                     continue
+                # Skip Office temp/lock files (~$filename.docx)
+                if fname.startswith('~$'):
+                    continue
 
                 _scan_status["total_found"] += 1
                 fp = os.path.join(dirpath, fname)

@@ -127,6 +127,7 @@ def _get_priority_files(limit: int = MAX_PER_RUN) -> list[dict]:
         WHERE t.status = 'ok'
           AND t.char_count >= ?
           AND u.id IS NULL
+          AND c.filename NOT LIKE '~$%'
         ORDER BY priority DESC, t.char_count DESC
         LIMIT ?
     """, [MIN_CHARS, limit])
