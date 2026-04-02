@@ -404,7 +404,51 @@ def retrieve_matter_chunks(
     if not all_chunk_ids:
         return retrieve(query, user_id, scope, n)
 
-    # ── Pass 1: standard similarity search ──
+    # ── Full-context mode: if matter is small enough, pass ALL chunks ──
+    FULL_CONTEXT_THRESHOLD = 80  # max chunks to dump everything
+    if len(all_chunk_ids) <= FULL_CONTEXT_THRESHOLD:
+        log.info("matter_full_context: %d chunks from %d files — using full context",
+                 len(all_chunk_ids), len(file_map))
+        embedding = embed_query(query)
+        col_name = f"user_{user_id}_docs"
+        try:
+            client = _chroma_client()
+            coll = client.get_collection(col_name)
+            res = coll.get(
+                ids=all_chunk_ids,
+                include=["documents", "metadatas", "embeddings"],
+            )
+            if res["documents"]:
+                chunks = []
+                for doc, meta, emb in zip(res["documents"], res["metadatas"], res["embeddings"]):
+                    # cosine similarity (embeddings are L2-normalized)
+                    try:
+                        raw_score = float(sum(a * b for a, b in zip(embedding, list(emb))))
+                        # Floor at 0.50 — full-context mode means we want ALL chunks
+                        # regardless of similarity (the whole point is complete coverage)
+                        score = round(max(raw_score, 0.50), 4)
+                    except Exception:
+                        score = 0.50
+                    chunks.append({
+                        "text":       doc,
+                        "source":     meta.get("source", "unknown"),
+                        "path":       meta.get("path", ""),
+                        "chunk":      meta.get("chunk", 0),
+                        "page_start": meta.get("page_start", 0),
+                        "page_end":   meta.get("page_end", 0),
+                        "line_start": meta.get("line_start", 0),
+                        "line_end":   meta.get("line_end", 0),
+                        "score":      score,
+                        "collection": col_name,
+                    })
+                chunks.sort(key=lambda x: x["score"], reverse=True)
+                return chunks
+        except Exception as e:
+            log.warning("matter_full_context_error: %s", e)
+            # Fall through to two-pass approach
+
+    # ── Two-pass mode for larger matters ──
+    # Pass 1: standard similarity search
     pass1 = retrieve(query, user_id, scope, n=n)
 
     # Track which matter files are already represented
@@ -412,18 +456,16 @@ def retrieve_matter_chunks(
     represented_files: set[int] = set()
 
     for chunk in pass1:
-        # Check if this chunk belongs to a matter file
         chunk_path = chunk.get("path", "")
         for uid, info in file_map.items():
-            # Match by checking if any of the file's chunk IDs share the same path prefix
             if any(chunk_path and cid.startswith(str(chunk_path)) for cid in info["chunk_ids"]):
                 represented_files.add(uid)
                 break
 
-    # ── Pass 2: fill gaps — fetch best chunk per missing file ──
+    # Pass 2: fill gaps — fetch best chunk per missing file
     missing_uids = set(file_map.keys()) - represented_files
     if not missing_uids:
-        return pass1  # All files already represented
+        return pass1
 
     log.info("matter_fill_gaps: %d/%d files missing from pass-1, fetching",
              len(missing_uids), len(file_map))
@@ -442,19 +484,31 @@ def retrieve_matter_chunks(
         if not chunk_ids:
             continue
         try:
-            # Fetch all chunks for this file and find the best match
-            res = coll.get(
-                ids=chunk_ids,
-                include=["documents", "metadatas"],
-            )
-            if not res["documents"]:
+            # Query ChromaDB for best-matching chunks from this file
+            # Use the file path from the chunk IDs to filter
+            file_path = chunk_ids[0].rsplit("__chunk_", 1)[0] if "__chunk_" in chunk_ids[0] else ""
+            if file_path:
+                res = coll.query(
+                    query_embeddings=[embedding],
+                    n_results=min(2, len(chunk_ids)),
+                    where={"path": file_path},
+                    include=["documents", "metadatas", "distances"],
+                )
+            else:
+                # Fallback: query by IDs
+                res = coll.query(
+                    query_embeddings=[embedding],
+                    n_results=min(2, len(chunk_ids)),
+                    ids=chunk_ids,
+                    include=["documents", "metadatas", "distances"],
+                )
+            if not res["documents"] or not res["documents"][0]:
                 continue
-            # Embed and score each chunk to find best match
-            # (cheaper: just include all chunks, let the LLM sort it out)
-            # Include up to 2 chunks per missing file
-            best_chunks = []
-            for doc, meta in zip(res["documents"], res["metadatas"]):
-                best_chunks.append({
+            for doc, meta, dist in zip(
+                res["documents"][0], res["metadatas"][0], res["distances"][0]
+            ):
+                score = round(1 - dist, 4)
+                pass1.append({
                     "text":       doc,
                     "source":     meta.get("source", info["filename"]),
                     "path":       meta.get("path", ""),
@@ -463,14 +517,10 @@ def retrieve_matter_chunks(
                     "page_end":   meta.get("page_end", 0),
                     "line_start": meta.get("line_start", 0),
                     "line_end":   meta.get("line_end", 0),
-                    "score":      0.35,  # synthetic score (below display but above threshold)
+                    "score":      max(score, 0.31),  # floor above MIN_SCORE_THRESHOLD
                     "collection": col_name,
-                    "matter_fill": True,  # flag for debugging
+                    "matter_fill": True,
                 })
-            # Keep at most 2 chunks per file (first + last tend to have summary/total info)
-            if len(best_chunks) > 2:
-                best_chunks = [best_chunks[0], best_chunks[-1]]
-            pass1.extend(best_chunks)
         except Exception as e:
             log.warning("matter_fill_gap_error uid=%d: %s", uid, e)
             continue
@@ -521,11 +571,12 @@ _BASE_SYSTEM = """You are Sherlock, a senior paralegal AI with the instincts of 
 1. Work ONLY from the provided context. If a fact isn't in the documents, it does not exist.
 2. If context is insufficient, say exactly what is missing and why it matters to the question.
 3. Never speculate, invent, or fill gaps with general legal knowledge presented as case facts.
-4. Cite every material claim inline using ONLY this format: [filename]
+4. You ARE permitted and expected to synthesize, calculate, compare, and aggregate data ACROSS multiple documents. If the user asks for a total, summary table, or comparison — build it from the individual documents provided. Arithmetic on document data is not speculation; it is analysis.
+5. Cite every material claim inline using ONLY this format: [filename]
    Example: "The motion was denied on jurisdictional grounds. [Smith_v_Jones.txt]"
    You may cite multiple files in one sentence: [file1.txt] [file2.pdf]
-5. For web sources cite as: [Web: page title or url]
-6. Always name judges, parties, attorneys, and all other persons exactly as they appear in the documents.
+6. For web sources cite as: [Web: page title or url]
+7. Always name judges, parties, attorneys, and all other persons exactly as they appear in the documents.
 
 ═══ STRICTLY PROHIBITED ═══
 - Using ANY knowledge from your training data that is not explicitly present in the document context below
@@ -535,11 +586,13 @@ _BASE_SYSTEM = """You are Sherlock, a senior paralegal AI with the instincts of 
 - Answering a specific case question when the documents do not contain the answer
 
 ═══ WHEN CONTEXT IS ABSENT OR INSUFFICIENT ═══
-If the document context does not contain the information needed to answer the question, you MUST respond with this exact structure:
+If the document context does not contain ANY relevant information to answer the question, you MUST respond with this exact structure:
 "The indexed documents do not contain [specific information requested].
 I cannot answer this without the source material. [Identify what document type would contain the answer, e.g., 'A deposition transcript', 'The settlement agreement', 'The docket sheet'.]"
 
-Do NOT attempt to answer. Do NOT say "typically" or "generally" or "in most cases." Stop there.
+IMPORTANT: If multiple documents each contain PARTIAL information (e.g., individual bills, separate invoices, different provider statements), you HAVE the information — synthesize it. Build the summary, calculate the totals, create the comparison. Only use the "do not contain" response when truly NO relevant data exists.
+
+Do NOT say "typically" or "generally" or "in most cases" when speculating. But DO perform calculations and aggregations on data that IS present.
 
 ═══ HOW TO RESPOND ═══
 
@@ -927,7 +980,7 @@ async def stream_response(
             "system": system_prompt,
             "prompt": prompt,
             "stream": True,
-            "options": {"num_predict": 4096},
+            "options": {"num_predict": 8192},
         },
         stream=True,
         timeout=600,
@@ -1148,7 +1201,7 @@ def query_sync(
             "system": system_prompt,
             "prompt": prompt,
             "stream": False,
-            "options": {"num_predict": 4096},
+            "options": {"num_predict": 8192},
         },
         timeout=180,
     )

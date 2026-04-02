@@ -785,6 +785,11 @@ function renderMessage(msg) {
 
 // ── New matter modal ──────────────────────────────────────────────────────────
 
+
+// -- Pending matter-from-case flow --
+let _pendingMatterFromCase = false;
+let _pendingMatterName = '';
+
 function openNewMatterModal() {
   document.getElementById('newMatterName').value = '';
   document.getElementById('newMatterError').classList.add('hidden');
@@ -795,7 +800,19 @@ function openNewMatterModal() {
     state.cases
       .filter(c => c.status === 'active')
       .map(c => `<option value="${c.id}">${escHtml(c.case_name)}${c.case_number ? ` (${escHtml(c.case_number)})` : ''}</option>`)
-      .join('');
+      .join('') +
+    '<option value="__new__">+ Create New Case...</option>';
+
+  // Listen for "+ Create New Case" selection
+  sel.onchange = function() {
+    if (sel.value === '__new__') {
+      sel.value = '';
+      _pendingMatterFromCase = true;
+      _pendingMatterName = document.getElementById('newMatterName').value;
+      closeModal('newMatterModal');
+      openNewCaseModal();
+    }
+  };
 
   document.getElementById('newMatterModal').classList.remove('hidden');
   setTimeout(() => document.getElementById('newMatterName').focus(), 50);
@@ -891,6 +908,20 @@ function openNewCaseModal() {
   document.getElementById('nc_case_type').value = '';
   document.getElementById('newCaseError').classList.add('hidden');
   document.getElementById('newCaseModal').classList.remove('hidden');
+
+  // If coming from New Task flow, update cancel to return to matter modal
+  const cancelBtn = document.querySelector('#newCaseModal .btn[onclick*="closeModal"]');
+  if (_pendingMatterFromCase && cancelBtn) {
+    cancelBtn.onclick = function() {
+      _pendingMatterFromCase = false;
+      _pendingMatterName = '';
+      closeModal('newCaseModal');
+      openNewMatterModal();
+    };
+  } else if (cancelBtn) {
+    cancelBtn.onclick = function() { closeModal('newCaseModal'); };
+  }
+
   setTimeout(() => document.getElementById('nc_case_name').focus(), 50);
 }
 
@@ -922,6 +953,15 @@ async function createCase() {
     closeModal('newCaseModal');
     toast(`Case "${newCase.case_name}" created.`, 'success');
     renderCases();
+
+    // If we came from the New Task dialog, reopen it with the new case selected
+    if (_pendingMatterFromCase) {
+      _pendingMatterFromCase = false;
+      openNewMatterModal();
+      document.getElementById('newMatterName').value = _pendingMatterName || '';
+      document.getElementById('newMatterCaseId').value = String(newCase.id);
+      _pendingMatterName = '';
+    }
   } catch (e) {
     document.getElementById('newCaseError').textContent = e.message;
     document.getElementById('newCaseError').classList.remove('hidden');
@@ -2791,3 +2831,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Also load on admin panel display
 const _origShowSection = window.showAdminSection;
+
+
+// ── NAS Folder Browser ──────────────────────────────────────────────────────
+
+async function openNasBrowser(targetInputId) {
+  state._nasBrowserTarget = targetInputId;
+  state._nasBrowserPath = '';
+  await loadNasFolders('');
+  document.getElementById('nasBrowserModal').classList.remove('hidden');
+}
+
+async function loadNasFolders(path) {
+  const modal = document.getElementById('nasBrowserModal');
+  const listEl = document.getElementById('nasBrowserList');
+  const pathEl = document.getElementById('nasBrowserPath');
+  const countEl = document.getElementById('nasBrowserFileCount');
+  listEl.innerHTML = '<div style="padding:12px;color:var(--text-muted);">Loading...</div>';
+
+  try {
+    const params = path ? `?path=${encodeURIComponent(path)}` : '';
+    const data = await api('GET', `/api/nas/browse${params}`);
+    state._nasBrowserPath = data.path || '';
+    pathEl.textContent = data.path || 'NAS Root';
+    countEl.textContent = data.file_count != null ? `${data.file_count} files in this folder` : '';
+
+    let html = '';
+    // Back button
+    if (data.parent) {
+      html += `<div class="nas-folder-item nas-back" onclick="loadNasFolders('${data.parent.replace(/'/g, "\\'")}')">&#8592; Back</div>`;
+    }
+    if (data.folders.length === 0) {
+      html += '<div style="padding:12px;color:var(--text-muted);">No subfolders</div>';
+    }
+    for (const f of data.folders) {
+      const escapedPath = f.path.replace(/'/g, "\\'");
+      html += `<div class="nas-folder-item" onclick="loadNasFolders('${escapedPath}')">
+        <span class="nas-folder-icon">&#128193;</span> ${escHtml(f.name)}
+      </div>`;
+    }
+    listEl.innerHTML = html;
+  } catch (e) {
+    listEl.innerHTML = `<div style="padding:12px;color:var(--error);">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function selectNasFolder() {
+  const path = state._nasBrowserPath;
+  if (path && state._nasBrowserTarget) {
+    document.getElementById(state._nasBrowserTarget).value = path;
+  }
+  closeModal('nasBrowserModal');
+}
+

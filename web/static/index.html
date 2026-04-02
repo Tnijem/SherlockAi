@@ -524,7 +524,10 @@
     </div>
     <div class="field">
       <label>NAS Path <span style="color:var(--text-muted);font-weight:normal;">(optional)</span></label>
-      <input type="text" id="ec_nas_path" placeholder="/Volumes/NAS/Cases/Smith_v_Jones">
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="ec_nas_path" placeholder="Click Browse to select folder" style="flex:1;">
+        <button type="button" class="btn" style="padding:4px 12px;font-size:12px;" onclick="openNasBrowser('ec_nas_path')">Browse</button>
+      </div>
     </div>
     <div class="field">
       <label>Notes</label>
@@ -589,7 +592,10 @@
     </div>
     <div class="field">
       <label>NAS Path <span style="color:var(--text-muted);font-weight:normal;">(optional — folder on shared drive)</span></label>
-      <input type="text" id="nc_nas_path" placeholder="/Volumes/NAS/Cases/Smith_v_Jones">
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="nc_nas_path" placeholder="Click Browse to select folder" style="flex:1;">
+        <button type="button" class="btn" style="padding:4px 12px;font-size:12px;" onclick="openNasBrowser('nc_nas_path')">Browse</button>
+      </div>
     </div>
     <div class="field">
       <label>Notes</label>
@@ -692,5 +698,20 @@
 </div>
 
 <script src="/static/app.js"></script>
+
+<!-- NAS Folder Browser Modal -->
+<div class="modal-overlay hidden" id="nasBrowserModal">
+  <div class="modal" style="max-width:500px;">
+    <h2>Select NAS Folder</h2>
+    <div id="nasBrowserPath" style="font-size:11px;color:var(--text-muted);margin-bottom:4px;word-break:break-all;">NAS Root</div>
+    <div id="nasBrowserFileCount" style="font-size:11px;color:var(--accent);margin-bottom:8px;"></div>
+    <div id="nasBrowserList" style="max-height:350px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('nasBrowserModal')">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:8px 24px;" onclick="selectNasFolder()">Select This Folder</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

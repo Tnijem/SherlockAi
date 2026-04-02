@@ -476,6 +476,63 @@ def nas_status(current_user: User = Depends(auth.get_current_user)):
     return {"paths": paths, "all_ok": all_ok}
 
 
+
+@app.get("/api/nas/browse")
+def nas_browse(
+    path: str = "",
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Browse NAS directories. Returns subfolders of the given path."""
+    from config import NAS_PATHS
+    import os
+
+    # Determine the NAS root(s)
+    nas_roots = [Path(p).resolve() for p in (NAS_PATHS or [])]
+    if not nas_roots:
+        raise HTTPException(status_code=400, detail="No NAS paths configured")
+
+    # If no path given, return the top-level NAS roots and their children
+    if not path:
+        folders = []
+        for root in nas_roots:
+            if root.exists():
+                folders.append({"name": root.name, "path": str(root), "is_root": True})
+        return {"path": "", "folders": folders}
+
+    # Validate the path is under a NAS root (prevent traversal)
+    target = Path(path).resolve()
+    if not any(str(target).startswith(str(r)) for r in nas_roots):
+        raise HTTPException(status_code=403, detail="Path is outside NAS roots")
+
+    if not target.exists() or not target.is_dir():
+        raise HTTPException(status_code=404, detail="Directory not found")
+
+    # List subdirectories (not files — just folders for navigation)
+    folders = []
+    try:
+        for entry in sorted(os.scandir(str(target)), key=lambda e: e.name.lower()):
+            if entry.is_dir() and not entry.name.startswith('.') and entry.name != '#recycle':
+                folders.append({"name": entry.name, "path": str(Path(entry.path).resolve())})
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    # Count files in this directory (not recursive — just immediate children)
+    file_count = 0
+    try:
+        for entry in os.scandir(str(target)):
+            if entry.is_file() and not entry.name.startswith('.'):
+                file_count += 1
+    except Exception:
+        pass
+
+    return {
+        "path": str(target),
+        "parent": str(target.parent) if target.parent != target else None,
+        "folders": folders,
+        "file_count": file_count,
+    }
+
+
 @app.get("/api/research/status")
 def research_status(current_user: User = Depends(auth.get_current_user)):
     """Check whether the local SearXNG instance is reachable."""

@@ -2770,3 +2770,27 @@ sup.cite-ref:hover { background: var(--gold-light); }
   cursor: pointer; font-size: 15px; padding: 0 2px; line-height: 1;
 }
 .matter-file-retry:hover { color: #f59e0b; }
+
+/* ── NAS Folder Browser ─────────────────────────────────────────────── */
+.nas-folder-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nas-folder-item:hover {
+  background: var(--bg-secondary);
+}
+.nas-folder-item:last-child {
+  border-bottom: none;
+}
+.nas-back {
+  color: var(--accent);
+  font-weight: 500;
+}
+.nas-folder-icon {
+  font-size: 15px;
+}
