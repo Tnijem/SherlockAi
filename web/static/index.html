@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sherlock</title>
   <link rel="icon" type="image/svg+xml" id="favicon" href="/static/favicon-formal.svg">
-  <link rel="stylesheet" href="/static/style.css?v=4">
+  <link rel="stylesheet" href="/static/style.css?v=7">
 </head>
 <body>
 
@@ -28,6 +28,7 @@
       <button onclick="showView('outputs')" id="nav-outputs">Outputs</button>
       <button onclick="showView('admin')" id="nav-admin" class="hidden">Admin</button>
       <button onclick="showView('config')" id="nav-config" class="hidden">Config</button>
+      <button onclick="showView('logs')" id="nav-logs" class="hidden">Logs</button>
     </nav>
     <div class="header-right">
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Switch theme"></button>
@@ -420,38 +421,89 @@
           </div>
         </div>
 
-        <!-- Log viewer: fills all remaining vertical space, never scrolls away -->
-        <div class="log-viewer-section">
-          <div class="log-toolbar">
-            <span class="log-toolbar-label">LOGS</span>
-            <select id="logStream" onchange="loadLogs()">
-              <option value="app">App</option>
-              <option value="audit">Audit</option>
-              <option value="rag">RAG</option>
-              <option value="indexer">Indexer</option>
-              <option value="web">Web</option>
-            </select>
-            <select id="logLevel" onchange="loadLogs()">
-              <option value="">All levels</option>
-              <option value="INFO">INFO</option>
-              <option value="WARNING">WARNING</option>
-              <option value="ERROR">ERROR</option>
-            </select>
-            <input class="log-search" type="text" id="logSearch" placeholder="Search…" oninput="debounceLoadLogs()">
-            <label class="log-live-label" id="logLiveLabel">
-              <input type="checkbox" id="logLive" onchange="toggleLogRefresh()">
-              <span class="log-live-dot" style="display:none" id="logLiveDot"></span>
-              Live
-            </label>
-            <button class="btn log-btn" onclick="downloadLog()">&#8681;</button>
-            <button class="btn log-btn" onclick="loadLogs()">&#8635;</button>
-            <button class="btn log-btn" id="logPanelToggle" onclick="toggleLogPanel()" title="Toggle log panel">&#9660;</button>
-          </div>
-          <div class="log-viewer" id="logViewer">
-            <div class="log-empty">Select a stream and click ↻ Refresh to load.</div>
-          </div>
-        </div>
 
+
+      </div>
+
+
+      <!-- Logs View (admin only) — full-page SIEM-style log viewer -->
+      <div id="view-logs" class="logs-view hidden">
+        <div class="lv-page">
+          <div class="lv-page-toolbar">
+            <div class="lv-page-toolbar-left">
+              <span class="lv-page-title">SYSTEM LOGS</span>
+              <select class="lv-select" id="logStream" onchange="loadLogs()">
+                <option value="app">App</option>
+                <option value="audit">Audit</option>
+                <option value="rag">RAG</option>
+                <option value="indexer">Indexer</option>
+                <option value="web">Web</option>
+              </select>
+              <select class="lv-select" id="logLevel" onchange="loadLogs()">
+                <option value="">All Levels</option>
+                <option value="DEBUG">DEBUG</option>
+                <option value="INFO">INFO</option>
+                <option value="WARNING">WARNING</option>
+                <option value="ERROR">ERROR</option>
+                <option value="CRITICAL">CRITICAL</option>
+              </select>
+              <select class="lv-select" id="logTimeRange" onchange="loadLogs()">
+                <option value="">All Time</option>
+                <option value="5m">Last 5m</option>
+                <option value="15m">Last 15m</option>
+                <option value="1h">Last 1h</option>
+                <option value="6h">Last 6h</option>
+                <option value="24h">Last 24h</option>
+              </select>
+              <div class="lv-search-wrap">
+                <input type="text" class="lv-search" id="logSearch" placeholder="Search logs…  ( / )" oninput="debounceLoadLogs()">
+              </div>
+            </div>
+            <div class="lv-page-toolbar-right">
+              <div class="lv-live-group">
+                <label class="lv-live-toggle" id="logLiveLabel">
+                  <input type="checkbox" id="logLive" onchange="toggleLogLive()">
+                  <span class="lv-live-dot" id="logLiveDot"></span>
+                  <span>Live</span>
+                </label>
+                <select class="lv-select lv-interval-select" id="logLiveInterval" onchange="changeLogInterval()">
+                  <option value="1000">1s</option>
+                  <option value="2000" selected>2s</option>
+                  <option value="5000">5s</option>
+                  <option value="10000">10s</option>
+                </select>
+              </div>
+              <button class="lv-btn" onclick="downloadLog()" title="Export">&#8681; Export</button>
+              <button class="lv-btn" onclick="loadLogs()" title="Refresh">&#8635;</button>
+            </div>
+          </div>
+          <div class="lv-summary-bar" id="logSummaryBar">
+            <span class="lv-summary-total" id="logTotal">0 entries</span>
+            <button class="lv-pill lv-pill-debug"    id="logPillDEBUG"    onclick="filterLogByPill('DEBUG')">0</button>
+            <button class="lv-pill lv-pill-info"     id="logPillINFO"     onclick="filterLogByPill('INFO')">0</button>
+            <button class="lv-pill lv-pill-warning"  id="logPillWARNING"  onclick="filterLogByPill('WARNING')">0</button>
+            <button class="lv-pill lv-pill-error"    id="logPillERROR"    onclick="filterLogByPill('ERROR')">0</button>
+            <button class="lv-pill lv-pill-critical" id="logPillCRITICAL" onclick="filterLogByPill('CRITICAL')">0</button>
+            <span class="lv-kbd-hints">
+              <kbd>/</kbd> Search &nbsp; <kbd>Space</kbd> Pause
+            </span>
+          </div>
+          <div class="lv-table-head" id="logTableHead">
+            <span class="lv-th lv-th-ts" data-col="ts">Timestamp</span>
+            <span class="lv-th lv-th-lvl" data-col="lvl">Level</span>
+            <span class="lv-th lv-th-src" data-col="src">Source</span>
+            <span class="lv-th lv-th-msg" data-col="msg">Message</span>
+            <span class="lv-th lv-th-detail" data-col="detail">Details</span>
+          </div>
+          <div class="lv-scroll" id="logScroll">
+            <div class="lv-scroll-inner" id="logScrollInner">
+              <div class="lv-empty">Select a stream and click &#8635; to load.</div>
+            </div>
+          </div>
+          <button class="lv-jump-bottom hidden" id="logJumpBottom" onclick="logJumpToBottom()">
+            &#8681; Jump to latest
+          </button>
+        </div>
       </div>
 
       <!-- Config View (admin only) -->
@@ -753,7 +805,7 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=4"></script>
+<script src="/static/app.js?v=7"></script>
 
 <!-- NAS Folder Browser Modal -->
 <div class="modal-overlay hidden" id="nasBrowserModal">
@@ -768,6 +820,7 @@
     </div>
   </div>
 </div>
+
 
 </body>
 </html>

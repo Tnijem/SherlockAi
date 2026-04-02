@@ -229,13 +229,21 @@ def _extract_docx(fp: Path) -> str:
 
 
 def _extract_via_libreoffice(fp: Path) -> str:
+    """Convert .doc/.xls/.ppt via LibreOffice headless. Uses Popen + poll to yield GIL."""
+    import time as _t
     with tempfile.TemporaryDirectory() as tmpdir:
-        result = subprocess.run(
-            ["libreoffice", "--headless", "--convert-to", "txt:Text", "--outdir", tmpdir, str(fp)],
-            capture_output=True, timeout=60,
+        proc = subprocess.Popen(
+            ["/opt/homebrew/bin/libreoffice", "--headless", "--convert-to", "txt:Text", "--outdir", tmpdir, str(fp)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
-        if result.returncode != 0:
-            raise RuntimeError(f"LibreOffice failed: {result.stderr.decode()}")
+        deadline = _t.monotonic() + 30  # 30s timeout (was 60)
+        while proc.poll() is None:
+            if _t.monotonic() > deadline:
+                proc.kill()
+                raise RuntimeError("LibreOffice timed out (30s)")
+            _t.sleep(0.2)  # yield GIL every 200ms so uvicorn can serve requests
+        if proc.returncode != 0:
+            raise RuntimeError(f"LibreOffice failed: {proc.stderr.read().decode()[:200]}")
         out = Path(tmpdir) / (fp.stem + ".txt")
         return out.read_text(encoding="utf-8", errors="ignore") if out.exists() else ""
 

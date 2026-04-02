@@ -332,14 +332,14 @@ def retrieve(
 
             # Merge: boost vector results that also have BM25 hits
             for r in results:
-                chunk_id = f"{r.get('path', '')}__chunk_{r['chunk']}"
+                chunk_id = f"{r.get('path', '')}__chunk_{r.get('chunk', 0)}"
                 if chunk_id in bm25_lookup:
                     bm25_norm = bm25_lookup[chunk_id]["bm25_norm"]
                     # Weighted combination: 0.6 vector + 0.4 keyword
                     r["score"] = round(0.6 * r["score"] + 0.4 * bm25_norm, 4)
 
             # Add BM25-only results (not in vector results) with reduced score
-            existing_ids = {f"{r.get('path', '')}__chunk_{r['chunk']}" for r in results}
+            existing_ids = {f"{r.get('path', '')}__chunk_{r.get('chunk', 0)}" for r in results}
             for bm25_r in bm25_results:
                 if bm25_r["chunk_id"] not in existing_ids:
                     results.append({
@@ -772,7 +772,7 @@ def _build_prompt(
                 if c.get("page_start") else
                 ("Lines " + (str(c["line_start"]) if c["line_start"] == c["line_end"] else f"{c['line_start']}-{c['line_end']}"))
                 if c.get("line_start") else
-                f"Chunk {c['chunk']}",
+                f"Chunk {c.get('chunk', 0)}",
             score=c["score"],
             txt=c["text"],
         )
@@ -988,16 +988,19 @@ async def stream_response(
             yield (_NO_CONTEXT_MSG, [])
             return
 
-    # ── Supplement sparse ChromaDB results with NAS search ──────────────────
-    if len(chunks) < 3 and not research_mode:
-        nas_extra = _nas_fallback_search(search_query, limit=8)
+    # ── Always supplement with NAS search for broader coverage ─────────────
+    if not research_mode:
+        nas_limit = 15 if len(chunks) < 3 else 8
+        nas_extra = _nas_fallback_search(search_query, limit=nas_limit)
         existing_paths = {c.get("path", "") for c in chunks}
+        added = 0
         for nr in nas_extra:
             if nr["path"] not in existing_paths:
                 chunks.append(nr)
                 existing_paths.add(nr["path"])
-        if nas_extra:
-            log.info("rag_nas_supplement: added %d NAS results to sparse ChromaDB", len(nas_extra))
+                added += 1
+        if added:
+            log.info("rag_nas_supplement: added %d NAS results (had %d ChromaDB chunks)", added, len(chunks) - added)
 
     # Optionally fetch web results
     web_results: list[dict] = []
@@ -1135,7 +1138,7 @@ def extract_deadlines(
         return []
 
     doc_text = "\n\n---\n\n".join(
-        f"[Doc: {c['source']} | Chunk {c['chunk']}]\n{c['text']}"
+        f"[Doc: {c['source']} | Chunk {c.get('chunk', 0)}]\n{c['text']}"
         for c in chunks
     )
 

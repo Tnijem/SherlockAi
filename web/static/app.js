@@ -95,6 +95,7 @@ window.addEventListener('DOMContentLoaded', () => {
   if (state.user.role === 'admin') {
     document.getElementById('nav-admin').classList.remove('hidden');
     document.getElementById('nav-config').classList.remove('hidden');
+    document.getElementById('nav-logs').classList.remove('hidden');
   }
 
   initTheme();
@@ -230,42 +231,30 @@ function clearChatScreen() {
     </div>`;
 }
 
-// ── Log Viewer ────────────────────────────────────────────────────────────────
+// ── Logs Page ─────────────────────────────────────────────────────────────────
 
 let _logRefreshTimer = null;
 let _logDebounceTimer = null;
+let _logInterval = 2000;
+let _logActivePill = null;
+let _logAllEntries = [];
+
+function initLogsView() {
+  loadLogs();
+  _logBindKeys();
+}
 
 function debounceLoadLogs() {
   clearTimeout(_logDebounceTimer);
   _logDebounceTimer = setTimeout(loadLogs, 350);
 }
 
-function toggleLogRefresh() {
-  const cb    = document.getElementById('logLive');
-  const label = document.getElementById('logLiveLabel');
-  const dot   = document.getElementById('logLiveDot');
-  if (!cb) return;
-  if (cb.checked) {
-    loadLogs();
-    _logRefreshTimer = setInterval(liveAppendLogs, 2000);
-    label?.classList.add('active');
-    if (dot) dot.style.display = 'inline-block';
-  } else {
-    clearInterval(_logRefreshTimer);
-    _logRefreshTimer = null;
-    label?.classList.remove('active');
-    if (dot) dot.style.display = 'none';
-  }
-}
-
-async function loadLogs() {
+async function loadLogs(opts = {}) {
   const stream = document.getElementById('logStream')?.value || 'app';
-  const level  = document.getElementById('logLevel')?.value  || '';
+  const level  = _logActivePill || document.getElementById('logLevel')?.value || '';
   const search = document.getElementById('logSearch')?.value || '';
-  const viewer = document.getElementById('logViewer');
-  if (!viewer) return;
 
-  let url = `/api/admin/logs?stream=${encodeURIComponent(stream)}&lines=500`;
+  let url = `/api/admin/logs?stream=${encodeURIComponent(stream)}&lines=2000`;
   if (level)  url += `&level=${encodeURIComponent(level)}`;
   if (search) url += `&search=${encodeURIComponent(search)}`;
 
@@ -274,215 +263,168 @@ async function loadLogs() {
     const resp = await api('GET', url);
     entries = Array.isArray(resp) ? resp : (resp?.entries ?? resp);
   } catch (e) {
-    viewer.innerHTML = `<div class="log-empty">Error: ${escHtml(e.message)}</div>`;
+    if (!opts.silent) toast('Log fetch error: ' + e.message, 'error');
+    return;
+  }
+  if (!entries) entries = [];
+
+  // Time range filter (client-side)
+  const range = document.getElementById('logTimeRange')?.value;
+  if (range) {
+    const now = Date.now();
+    const ms = { '5m': 5*60e3, '15m': 15*60e3, '1h': 60*60e3, '6h': 6*60*60e3, '24h': 24*60*60e3 }[range];
+    if (ms) {
+      const cutoff = now - ms;
+      entries = entries.filter(e => {
+        if (!e.ts) return true;
+        const t = new Date(e.ts).getTime();
+        return isNaN(t) || t >= cutoff;
+      });
+    }
+  }
+
+  _logAllEntries = entries;
+  _logUpdateSummary(entries);
+  _logRenderTable(entries);
+
+  // Auto-scroll to bottom if live
+  if (document.getElementById('logLive')?.checked) {
+    const scroll = document.getElementById('logScroll');
+    if (scroll) requestAnimationFrame(() => { scroll.scrollTop = scroll.scrollHeight; });
+  }
+}
+
+function _logUpdateSummary(entries) {
+  const counts = { DEBUG: 0, INFO: 0, WARNING: 0, ERROR: 0, CRITICAL: 0 };
+  entries.forEach(e => {
+    const lvl = (e.level || 'INFO').toUpperCase();
+    if (counts[lvl] !== undefined) counts[lvl]++;
+  });
+
+  const totalEl = document.getElementById('logTotal');
+  if (totalEl) totalEl.textContent = entries.length.toLocaleString() + ' entries';
+
+  ['DEBUG','INFO','WARNING','ERROR','CRITICAL'].forEach(lvl => {
+    const pill = document.getElementById('logPill' + lvl);
+    if (pill) {
+      pill.textContent = counts[lvl] + ' ' + lvl;
+      pill.classList.toggle('active', _logActivePill === lvl);
+    }
+  });
+}
+
+function _logRenderTable(entries) {
+  const inner = document.getElementById('logScrollInner');
+  if (!inner) return;
+
+  if (!entries.length) {
+    inner.innerHTML = '<div class="lv-empty">No log entries match.</div>';
     return;
   }
 
-  if (!entries || !entries.length) {
-    viewer.innerHTML = '<div class="log-empty" style="padding:16px;">No log entries match.</div>';
-    return;
-  }
-
-  // Apply sort
-  const sort = viewer._logSort || { col: null, dir: 1 };
-  if (sort.col) {
-    entries = [...entries].sort((a, b) => {
-      let va, vb;
-      if (sort.col === 'ts')  { va = a.ts || ''; vb = b.ts || ''; }
-      else if (sort.col === 'lvl') { va = a.level || ''; vb = b.level || ''; }
-      else if (sort.col === 'msg') { va = a.msg || a.message || ''; vb = b.msg || b.message || ''; }
-      else { va = ''; vb = ''; }
-      return va < vb ? -sort.dir : va > vb ? sort.dir : 0;
-    });
-  }
-
-  const atBottom = viewer.scrollHeight - viewer.scrollTop - viewer.clientHeight < 60;
-  const skip = new Set(['ts', 'level', 'logger', 'msg', 'message', 'rid', 'exc_info']);
-
-  function sortIcon(col) {
-    if (sort.col !== col) return '<span class="log-sort-icon">⇅</span>';
-    return `<span class="log-sort-icon active">${sort.dir === 1 ? '↑' : '↓'}</span>`;
-  }
-
-  // Header is a separate sticky element OUTSIDE the grid
-  let html = `<div class="log-table-head" id="logTableHead">
-    <span data-col="ts">Time ${sortIcon('ts')}</span>
-    <span data-col="lvl">Level ${sortIcon('lvl')}</span>
-    <span data-col="msg">Message ${sortIcon('msg')}</span>
-    <span data-col="detail">Details</span>
-  </div>
-  <div class="log-table" id="logTable">`;
+  const skip = new Set(['ts','level','logger','msg','message','rid','exc_info']);
+  let html = '';
 
   entries.forEach((entry, i) => {
     const lvl = (entry.level || 'INFO').toUpperCase();
-    const ts  = entry.ts ? entry.ts.replace('T', ' ').replace(/\.\d+/, '').replace('Z', '') : '';
+    const ts  = (entry.ts || '').replace('T',' ').replace(/\.\d+/,'').replace('Z','');
     const msg = escHtml(entry.msg || entry.message || '');
-
+    const src = escHtml(entry.logger || '');
     const extras = Object.entries(entry)
       .filter(([k]) => !skip.has(k))
-      .map(([k, v]) => `${escHtml(k)}=${escHtml(String(v))}`)
+      .map(([k,v]) => `${escHtml(k)}=${escHtml(String(v))}`)
       .join('  ');
 
-    html += `<div class="log-entry log-level-${lvl}" data-log-idx="${i}" onclick="toggleLogDetail(this)">
-      <span class="log-ts">${ts}</span>
-      <span class="log-badge">${lvl}</span>
-      <span class="log-msg">${msg}</span>
-      <span class="log-detail-col">${escHtml(extras)}</span>
+    html += `<div class="lv-row" data-level="${lvl}" data-idx="${i}" onclick="_logToggleDetail(this)">
+      <span class="lv-cell lv-cell-ts">${ts}</span>
+      <span class="lv-cell lv-cell-lvl">${lvl}</span>
+      <span class="lv-cell lv-cell-src">${src}</span>
+      <span class="lv-cell lv-cell-msg">${msg}</span>
+      <span class="lv-cell lv-cell-detail">${escHtml(extras)}</span>
     </div>`;
   });
 
-  html += '</div>';
-  viewer.innerHTML = html;
+  inner.innerHTML = html;
 
-  // Store entries for detail expansion
-  viewer._logEntries = entries;
-
-  // Track newest timestamp for live-append mode
-  viewer._liveLastTs = entries.reduce((m, e) => ((e.ts || '') > m ? (e.ts || '') : m), '');
-
-  if (atBottom) viewer.scrollTop = viewer.scrollHeight;
-
-  // Column sort click handlers
-  viewer.querySelectorAll('.log-table-head > span[data-col]').forEach(span => {
-    const col = span.dataset.col;
-    if (col === 'detail') return; // details not sortable
-    span.addEventListener('click', (e) => {
-      const cur = viewer._logSort || { col: null, dir: 1 };
-      viewer._logSort = { col, dir: cur.col === col ? -cur.dir : 1 };
-      loadLogs();
-    });
-  });
-
-  // Set up column resize
-  initLogColResize();
+  // Jump button visibility
+  const scroll = document.getElementById('logScroll');
+  const fab = document.getElementById('logJumpBottom');
+  if (scroll && fab) {
+    scroll.onscroll = () => {
+      const atBot = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 100;
+      fab.classList.toggle('hidden', atBot || entries.length < 30);
+    };
+  }
 }
 
-function toggleLogDetail(row) {
+function _logToggleDetail(row) {
   const existing = row.nextElementSibling;
-  if (existing && existing.classList.contains('log-detail-expanded')) {
+  if (existing && existing.classList.contains('lv-detail')) {
     existing.remove();
     return;
   }
-  // Remove any other expanded detail
-  row.closest('.log-table')?.querySelectorAll('.log-detail-expanded').forEach(el => el.remove());
+  // Remove any other expanded
+  row.closest('.lv-scroll-inner')?.querySelectorAll('.lv-detail').forEach(el => el.remove());
 
-  const viewer = document.getElementById('logViewer');
-  const entries = viewer?._logEntries;
-  const idx = parseInt(row.dataset.logIdx);
-  if (!entries || isNaN(idx)) return;
+  const idx = parseInt(row.dataset.idx);
+  const entry = _logAllEntries[idx];
+  if (!entry) return;
 
-  const entry = entries[idx];
   const detail = document.createElement('div');
-  detail.className = 'log-detail-expanded';
+  detail.className = 'lv-detail';
 
-  let content = '';
-  for (const [k, v] of Object.entries(entry)) {
-    content += `<span class="log-detail-key">${escHtml(k)}:</span> <span class="log-detail-val">${escHtml(String(v))}</span>\n`;
+  const json = JSON.stringify(entry, null, 2)
+    .replace(/("(?:[^"\\]|\\.)*")\s*:/g, '<span class="lv-json-key">$1</span>:')
+    .replace(/:\s*("(?:[^"\\]|\\.)*")/g, ': <span class="lv-json-str">$1</span>')
+    .replace(/:\s*(\d+\.?\d*)/g, ': <span class="lv-json-num">$1</span>')
+    .replace(/:\s*(true|false)/g, ': <span class="lv-json-bool">$1</span>')
+    .replace(/:\s*(null)/g, ': <span class="lv-json-null">$1</span>');
+
+  detail.innerHTML =
+    `<pre class="lv-detail-json">${json}</pre>` +
+    `<div class="lv-detail-actions">` +
+    `<button onclick="navigator.clipboard.writeText(JSON.stringify(_logAllEntries[${idx}],null,2));toast('Copied','success')">Copy JSON</button>` +
+    `<button onclick="navigator.clipboard.writeText(_logAllEntries[${idx}].msg||_logAllEntries[${idx}].message||'');toast('Copied','success')">Copy Message</button>` +
+    `</div>`;
+
+  row.after(detail);
+}
+
+function filterLogByPill(level) {
+  _logActivePill = _logActivePill === level ? null : level;
+  document.getElementById('logLevel').value = '';
+  loadLogs();
+}
+
+function toggleLogLive() {
+  const cb  = document.getElementById('logLive');
+  const dot = document.getElementById('logLiveDot');
+  const lbl = document.getElementById('logLiveLabel');
+  if (cb?.checked) {
+    loadLogs();
+    _logRefreshTimer = setInterval(() => loadLogs({ silent: true }), _logInterval);
+    lbl?.classList.add('active');
+    if (dot) dot.style.display = 'inline-block';
+  } else {
+    clearInterval(_logRefreshTimer);
+    _logRefreshTimer = null;
+    lbl?.classList.remove('active');
+    if (dot) dot.style.display = 'none';
   }
-  detail.innerHTML = content;
-  row.parentNode.insertBefore(detail, row.nextSibling);
 }
 
-function initLogColResize() {
-  const head   = document.getElementById('logTableHead');
-  const viewer = document.getElementById('logViewer');
-  if (!head || !viewer) return;
-  const heads    = head.querySelectorAll('span[data-col]');
-  const colNames = ['--log-col-ts', '--log-col-lvl', '--log-col-msg', '--log-col-detail'];
-
-  heads.forEach((h, i) => {
-    // Remove any existing handle to avoid duplication on re-render
-    h.querySelector('.log-col-handle')?.remove();
-
-    // Inject an explicit drag handle element (no edge-detection needed)
-    const handle = document.createElement('span');
-    handle.className = 'log-col-handle';
-    h.appendChild(handle);
-
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      e.stopPropagation(); // Don't fire the sort-click on the header
-      const startX = e.clientX;
-      const startW = h.offsetWidth;
-
-      function onMove(ev) {
-        const newW = Math.max(40, startW + (ev.clientX - startX));
-        viewer.style.setProperty(colNames[i], newW + 'px');
-      }
-      function onUp() {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-      }
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-  });
+function changeLogInterval() {
+  _logInterval = parseInt(document.getElementById('logLiveInterval')?.value || '2000');
+  if (_logRefreshTimer) {
+    clearInterval(_logRefreshTimer);
+    _logRefreshTimer = setInterval(() => loadLogs({ silent: true }), _logInterval);
+  }
 }
 
-async function liveAppendLogs() {
-  const stream = document.getElementById('logStream')?.value || 'app';
-  const level  = document.getElementById('logLevel')?.value  || '';
-  const search = document.getElementById('logSearch')?.value || '';
-  const viewer = document.getElementById('logViewer');
-  if (!viewer) return;
-
-  let url = `/api/admin/logs?stream=${encodeURIComponent(stream)}&lines=500`;
-  if (level)  url += `&level=${encodeURIComponent(level)}`;
-  if (search) url += `&search=${encodeURIComponent(search)}`;
-
-  let entries;
-  try {
-    const resp = await api('GET', url);
-    entries = Array.isArray(resp) ? resp : (resp?.entries ?? resp);
-  } catch { return; }
-
-  if (!entries?.length) return;
-
-  const lastTs = viewer._liveLastTs || '';
-  const table  = viewer.querySelector('#logTable');
-  if (!table) { loadLogs(); return; } // viewer was cleared, fall back to full load
-
-  const newEntries = lastTs
-    ? entries.filter(e => (e.ts || '') > lastTs)
-    : [];
-
-  if (!newEntries.length) return;
-
-  const skip = new Set(['ts', 'level', 'logger', 'msg', 'message', 'rid', 'exc_info']);
-  const existingCount = (viewer._logEntries || []).length;
-
-  newEntries.forEach((entry, j) => {
-    const lvl = (entry.level || 'INFO').toUpperCase();
-    const ts  = entry.ts ? entry.ts.replace('T', ' ').replace(/\.\d+/, '').replace('Z', '') : '';
-    const msg = escHtml(entry.msg || entry.message || '');
-    const extras = Object.entries(entry)
-      .filter(([k]) => !skip.has(k))
-      .map(([k, v]) => `${escHtml(k)}=${escHtml(String(v))}`)
-      .join('  ');
-
-    const row = document.createElement('div');
-    row.className = `log-entry log-level-${lvl}`;
-    row.dataset.logIdx = existingCount + j;
-    row.setAttribute('onclick', 'toggleLogDetail(this)');
-    row.innerHTML =
-      `<span class="log-ts">${ts}</span>` +
-      `<span class="log-badge">${lvl}</span>` +
-      `<span class="log-msg">${msg}</span>` +
-      `<span class="log-detail-col">${escHtml(extras)}</span>`;
-    table.appendChild(row);
-  });
-
-  viewer._logEntries = [...(viewer._logEntries || []), ...newEntries];
-  viewer._liveLastTs = newEntries[newEntries.length - 1].ts || lastTs;
-  viewer.scrollTop   = viewer.scrollHeight;
-}
-
-function toggleLogPanel() {
-  const section = document.querySelector('.log-viewer-section');
-  const btn     = document.getElementById('logPanelToggle');
-  if (!section) return;
-  const collapsed = section.classList.toggle('log-section-collapsed');
-  if (btn) btn.innerHTML = collapsed ? '&#9650;' : '&#9660;';
+function logJumpToBottom() {
+  const scroll = document.getElementById('logScroll');
+  if (scroll) scroll.scrollTop = scroll.scrollHeight;
+  document.getElementById('logJumpBottom')?.classList.add('hidden');
 }
 
 function downloadLog() {
@@ -495,13 +437,31 @@ function downloadLog() {
   a.remove();
 }
 
+// Keyboard shortcuts for logs page
+function _logKeyHandler(e) {
+  const logsView = document.getElementById('view-logs');
+  if (!logsView || logsView.classList.contains('hidden')) return;
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+  if (e.key === '/' ) { e.preventDefault(); document.getElementById('logSearch')?.focus(); }
+  if (e.key === ' ') {
+    e.preventDefault();
+    const cb = document.getElementById('logLive');
+    if (cb) { cb.checked = !cb.checked; toggleLogLive(); }
+  }
+}
+function _logBindKeys()   { document.addEventListener('keydown', _logKeyHandler); }
+function _logUnbindKeys() { document.removeEventListener('keydown', _logKeyHandler); }
+
+
 // ── View switching ────────────────────────────────────────────────────────────
 
-const VIEWS = ['chat', 'cases', 'upload', 'outputs', 'admin', 'config'];
+const VIEWS = ['chat', 'cases', 'upload', 'outputs', 'admin', 'config', 'logs'];
 
 function showView(name) {
-  // Stop log live-refresh when leaving admin view
-  if (name !== 'admin' && _logRefreshTimer) {
+  // Stop log live-refresh when leaving logs view
+  if (name !== 'logs' && _logRefreshTimer) {
     clearInterval(_logRefreshTimer);
     _logRefreshTimer = null;
     const cb = document.getElementById('logLive');
@@ -520,6 +480,7 @@ function showView(name) {
   if (name === 'admin') loadAdmin();
   if (name === 'cases') renderCases();
   if (name === 'config') loadConfig();
+  if (name === 'logs') initLogsView();
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -2564,13 +2525,13 @@ function renderSourceItem(s, i) {
   const rowHandler = isWeb
     ? `onclick="window.open(this.dataset.srcUrl,'_blank')"`
     : hasPath
-    ? `onclick="openInOS(this.dataset.srcPath)"`
+    ? `onclick="openPreview(this.dataset.srcPath, this.dataset.srcFile)"`
     : '';
 
   const icon = hasPath ? ' <span class="source-link-icon">&#128279;</span>' : '';
   const actions = hasPath ? `
     <span class="source-actions">
-      <button onclick="event.stopPropagation(); openInOS(this.closest('[data-src-path]').dataset.srcPath)" title="Open in default app">Open</button>
+      <button onclick="event.stopPropagation(); openPreview(this.closest('[data-src-path]').dataset.srcPath, this.closest('[data-src-path]').dataset.srcFile)" title="Open in default app">Open</button>
       <button onclick="event.stopPropagation(); downloadSource(this.closest('[data-src-path]').dataset.srcPath, this.closest('[data-src-path]').dataset.srcFile)" title="Download">&#8595;</button>
     </span>` : '';
 
@@ -2826,7 +2787,7 @@ async function previewFilterRule() {
 }
 
 // Load filters when admin panel opens
-const _origLoadAdmin = typeof loadAdmin === 'function' ? loadAdmin : null;
+const _origLoadAdmin2 = typeof loadAdmin === 'function' ? loadAdmin : null;
 document.addEventListener('DOMContentLoaded', () => {
   const adminTab = document.querySelector('[onclick*="showAdmin"], [onclick*="admin"]');
 });

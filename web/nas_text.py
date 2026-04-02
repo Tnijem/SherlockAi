@@ -121,6 +121,24 @@ _status_lock = threading.Lock()
 
 
 def get_extract_status() -> dict:
+    """Get extraction status — checks worker process status file first."""
+    import json as _json
+    status_file = os.path.join(os.path.dirname(__file__), "..", "data", "text_extract_status.json")
+    try:
+        with open(status_file) as f:
+            st = _json.load(f)
+        if st.get("active") and st.get("pid"):
+            try:
+                os.kill(st["pid"], 0)
+                st["elapsed_s"] = round(time.time() - st.get("started_at", time.time()))
+                return st
+            except OSError:
+                st["active"] = False
+                st["stage"] = "finished"
+        return st
+    except Exception:
+        pass
+    # Fallback to in-process status
     with _status_lock:
         s = dict(_extract_status)
         if s["started_at"]:
@@ -306,10 +324,37 @@ def _insert_result(conn, file_path, text, char_count, elapsed_ms, status, error_
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def start_text_extraction() -> dict:
-    """Start background text extraction. Returns immediately."""
-    t = threading.Thread(target=_run_extraction, daemon=True, name="text-extract")
-    t.start()
-    return {"started": True, "message": "Text extraction started in background"}
+    """Start text extraction as a separate process (avoids GIL contention with uvicorn)."""
+    import subprocess, json as _json
+
+    # Check if worker is already running
+    status_file = os.path.join(os.path.dirname(__file__), "..", "data", "text_extract_status.json")
+    try:
+        with open(status_file) as f:
+            st = _json.load(f)
+        if st.get("active") and st.get("pid"):
+            try:
+                os.kill(st["pid"], 0)
+                return {"started": False, "message": "Extraction already running (PID %d)" % st["pid"]}
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+    worker = os.path.join(os.path.dirname(__file__), "text_worker.py")
+    venv_python = os.path.join(os.path.dirname(__file__), "..", "venv", "bin", "python3")
+    if not os.path.exists(venv_python):
+        venv_python = "python3"
+
+    log_file = os.path.join(os.path.dirname(__file__), "..", "logs", "text_worker.log")
+    with open(log_file, "a") as lf:
+        proc = subprocess.Popen(
+            [venv_python, worker],
+            stdout=lf, stderr=lf,
+            cwd=os.path.dirname(__file__),
+        )
+    log.info("text_worker_launched: PID %d", proc.pid)
+    return {"started": True, "message": "Text extraction started in background (PID %d)" % proc.pid}
 
 
 def search_text(

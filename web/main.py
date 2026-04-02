@@ -2376,6 +2376,9 @@ def preview_file(
     decoded = urllib.parse.unquote(path)
     fp = Path(decoded)
 
+    from config import NAS_PATHS, UPLOADS_DIR, OUTPUTS_DIR
+
+    # Check indexed files and uploads
     allowed = (
         db.query(IndexedFile).filter(IndexedFile.file_path == decoded).first() is not None
         or db.query(Upload).filter(
@@ -2383,6 +2386,18 @@ def preview_file(
             Upload.user_id == current_user.id,
         ).first() is not None
     )
+
+    # Also allow files under trusted NAS paths or in nas_catalog
+    if not allowed:
+        real = fp.resolve()
+        trusted = [Path(UPLOADS_DIR).resolve(), Path(OUTPUTS_DIR).resolve()]
+        for np in (NAS_PATHS or []):
+            try:
+                trusted.append(Path(np).resolve())
+            except Exception:
+                pass
+        allowed = any(str(real).startswith(str(r)) for r in trusted)
+
     if not allowed:
         audit("file_access_denied", user_id=current_user.id, username=current_user.username,
               file_path=decoded)
@@ -2416,6 +2431,8 @@ def preview_file_text(
     decoded = urllib.parse.unquote(path)
     fp = Path(decoded)
 
+    from config import NAS_PATHS, UPLOADS_DIR, OUTPUTS_DIR
+
     allowed = (
         db.query(IndexedFile).filter(IndexedFile.file_path == decoded).first() is not None
         or db.query(Upload).filter(
@@ -2423,6 +2440,16 @@ def preview_file_text(
             Upload.user_id == current_user.id,
         ).first() is not None
     )
+    if not allowed:
+        real = fp.resolve()
+        trusted = [Path(UPLOADS_DIR).resolve(), Path(OUTPUTS_DIR).resolve()]
+        for np in (NAS_PATHS or []):
+            try:
+                trusted.append(Path(np).resolve())
+            except Exception:
+                pass
+        allowed = any(str(real).startswith(str(r)) for r in trusted)
+
     if not allowed:
         raise HTTPException(status_code=403, detail="File not accessible")
     if not fp.exists():
