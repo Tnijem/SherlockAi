@@ -47,3 +47,4 @@ setup-*.log
 
 # Models (large binaries)
 models/
+*.rtf

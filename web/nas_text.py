@@ -232,7 +232,8 @@ def _run_extraction():
                     batch_count = 0
                 continue
 
-            # Extract text
+            # Extract text (yield GIL before heavy I/O)
+            time.sleep(0.05)
             t0 = time.time()
             try:
                 text = extract_text(Path(file_path))
@@ -257,6 +258,9 @@ def _run_extraction():
             if batch_count >= BATCH_SIZE:
                 conn.commit()
                 batch_count = 0
+
+            # Yield GIL to keep uvicorn responsive
+            time.sleep(0.1)
 
             # Log progress every 500 files
             if _extract_status["processed"] % 500 == 0:

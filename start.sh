@@ -1,34 +1,27 @@
 #!/bin/bash
-# Sherlock prerequisites — NAS mount, Docker, Ollama
-# Called by com.sherlock.startup at boot BEFORE the web server starts
-# The web server itself is managed by com.sherlock.web (KeepAlive)
-
+# Sherlock startup — prerequisites + web server
 set -e
 LOG=~/Sherlock/logs/startup.log
 mkdir -p ~/Sherlock/logs
-TS=$(date '+%Y-%m-%d %H:%M:%S')
+TS() { date "+%Y-%m-%d %H:%M:%S"; }
 
-echo "${TS}: Sherlock prerequisites starting" >> "$LOG"
+echo "$(TS): Sherlock startup beginning" >> "$LOG"
 
-# 1. Wait for network (NAS at 192.168.2.221)
+# 1. Wait for network
 for i in {1..30}; do
   ping -c1 -W1 192.168.2.221 >/dev/null 2>&1 && break
   sleep 2
 done
 
-# 2. Mount NAS if not already mounted
-if ! mount | grep -q '/Users/nijemtech/NAS'; then
+# 2. Mount NAS
+if ! mount | grep -q "/Users/nijemtech/NAS"; then
   mkdir -p ~/NAS
-  if mount_smbfs '//admin:1qaz%40WSX3edc@192.168.2.221/Firm%20Data' ~/NAS 2>>"$LOG"; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S'): NAS mounted" >> "$LOG"
-  else
-    echo "$(date '+%Y-%m-%d %H:%M:%S'): NAS mount FAILED (will retry on next check)" >> "$LOG"
-  fi
-else
-  echo "${TS}: NAS already mounted" >> "$LOG"
+  mount_smbfs "//admin:1qaz%40WSX3edc@192.168.2.221/Firm%20Data" ~/NAS 2>>"$LOG" \
+    && echo "$(TS): NAS mounted" >> "$LOG" \
+    || echo "$(TS): NAS mount FAILED" >> "$LOG"
 fi
 
-# 3. Start Docker Desktop if not running
+# 3. Docker
 if ! /usr/local/bin/docker info >/dev/null 2>&1; then
   open -a Docker
   for i in {1..60}; do
@@ -36,24 +29,31 @@ if ! /usr/local/bin/docker info >/dev/null 2>&1; then
     sleep 2
   done
 fi
+cd ~/Sherlock && /usr/local/bin/docker compose up -d 2>>"$LOG"
 
-# 4. Start Docker containers (ChromaDB + SearXNG)
-cd ~/Sherlock
-/usr/local/bin/docker compose up -d 2>>"$LOG"
-echo "$(date '+%Y-%m-%d %H:%M:%S'): Docker containers started" >> "$LOG"
-
-# 5. Wait for ChromaDB to be healthy
+# 4. Wait for ChromaDB
 for i in {1..30}; do
   curl -sf http://localhost:8000/api/v2/heartbeat >/dev/null 2>&1 && break
   sleep 2
 done
-echo "$(date '+%Y-%m-%d %H:%M:%S'): ChromaDB healthy" >> "$LOG"
 
-# 6. Start Ollama if not running
+# 5. Ollama
 if ! pgrep -x ollama >/dev/null; then
   /opt/homebrew/bin/ollama serve >/dev/null 2>&1 &
   sleep 3
 fi
-echo "$(date '+%Y-%m-%d %H:%M:%S'): Ollama running" >> "$LOG"
 
-echo "$(date '+%Y-%m-%d %H:%M:%S'): Prerequisites DONE — web server managed by launchd" >> "$LOG"
+# 6. Start web server (kill any stale)
+pkill -f "uvicorn main:app" 2>/dev/null || true
+sleep 1
+cd ~/Sherlock/web
+nohup ~/Sherlock/venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 3000 >> ~/Sherlock/logs/sherlock-web.log 2>&1 &
+echo "$(TS): Sherlock started (PID $!)" >> "$LOG"
+
+# 7. Verify
+sleep 5
+if curl -sf http://localhost:3000/ >/dev/null 2>&1; then
+  echo "$(TS): Sherlock startup COMPLETE" >> "$LOG"
+else
+  echo "$(TS): Sherlock startup FAILED" >> "$LOG"
+fi

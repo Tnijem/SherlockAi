@@ -162,20 +162,15 @@ async def lifespan(app: FastAPI):
             log_app.info("NAS catalog + text DB initialized")
             # Start catalog scan (may take a while over SMB)
             nas_catalog.start_catalog_scan(incremental=True)
-            log_app.info("Catalog scan complete, triggering text extraction refresh")
-            nas_text.start_text_extraction()
+            log_app.info("Catalog scan complete — text extraction available via admin UI")
         except Exception as e:
             log_app.error("catalog_boot_error: %s", e)
 
     def _boot_text():
         import time as _t
-        # Wait a few seconds for text DB to init, then start on existing catalog
-        _t.sleep(5)
-        try:
-            log_app.info("Starting Tier 2 text extraction on existing catalog")
-            nas_text.start_text_extraction()
-        except Exception as e:
-            log_app.error("text_boot_error: %s", e)
+        _t.sleep(3)
+        nas_text.init_text_db()
+        log_app.info("Tier 2 text DB ready — extraction available via admin UI")
 
     _threading.Thread(target=_boot_catalog, daemon=True, name="catalog-boot").start()
     _threading.Thread(target=_boot_text, daemon=True, name="text-boot").start()
