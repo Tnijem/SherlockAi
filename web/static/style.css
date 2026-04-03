@@ -3175,7 +3175,7 @@ sup.cite-ref:hover { background: var(--gold-light); }
 /* ── Table head ─────────────────────────────────────────────────────────────── */
 .lv-table-head {
   display: grid;
-  grid-template-columns: 160px 72px 90px 1fr 40px;
+  grid-template-columns: 160px 72px 90px 1fr;
   gap: 0;
   padding: 0 16px;
   background: var(--surface);
@@ -3225,17 +3225,14 @@ sup.cite-ref:hover { background: var(--gold-light); }
 /* ── Log rows ───────────────────────────────────────────────────────────────── */
 .lv-row {
   display: grid;
-  grid-template-columns: 160px 72px 90px 1fr 40px;
+  grid-template-columns: 160px 72px 90px 1fr;
   gap: 0;
   padding: 0 16px;
   border-bottom: 1px solid rgba(46,51,80,0.4);
   border-left: 3px solid transparent;
   cursor: pointer;
   transition: background 0.08s;
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 28px;
+  min-height: 28px;
 }
 .lv-row:hover {
   background: rgba(255,255,255,0.03);
@@ -3314,9 +3311,6 @@ sup.cite-ref:hover { background: var(--gold-light); }
 
 /* ── Expanded detail row ────────────────────────────────────────────────────── */
 .lv-detail {
-  position: absolute;
-  left: 0;
-  right: 0;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   border-left: 3px solid var(--gold);
@@ -3502,14 +3496,14 @@ sup.cite-ref:hover { background: var(--gold-light); }
   .lv-kbd-hints { display: none; }
   .lv-table-head,
   .lv-row {
-    grid-template-columns: 130px 60px 70px 1fr 32px;
+    grid-template-columns: 130px 60px 70px 1fr;
   }
 }
 
 @media (max-width: 600px) {
   .lv-table-head,
   .lv-row {
-    grid-template-columns: 100px 52px 1fr 28px;
+    grid-template-columns: 100px 52px 1fr;
   }
   .lv-th-src,
   .lv-cell-src { display: none; }

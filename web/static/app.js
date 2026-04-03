@@ -335,12 +335,11 @@ function _logRenderTable(entries) {
       .map(([k,v]) => `${escHtml(k)}=${escHtml(String(v))}`)
       .join('  ');
 
-    html += `<div class="lv-row" data-level="${lvl}" data-idx="${i}" onclick="_logToggleDetail(this)">
+    html += `<div class="lv-row" data-level="${lvl}" data-idx="${i}" data-extras="${extras.replace(/"/g, '&quot;')}" onclick="_logToggleDetail(this)">
       <span class="lv-cell lv-cell-ts">${ts}</span>
       <span class="lv-cell lv-cell-lvl">${lvl}</span>
       <span class="lv-cell lv-cell-src">${src}</span>
       <span class="lv-cell lv-cell-msg">${msg}</span>
-      <span class="lv-cell lv-cell-detail">${escHtml(extras)}</span>
     </div>`;
   });
 
