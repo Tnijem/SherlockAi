@@ -105,8 +105,7 @@ def main():
                 )
                 status["extracted_empty"] += 1
 
-            if i % 20 == 0:
-                conn.commit()
+            conn.commit()
             if i % 100 == 0 and i > 0:
                 log.info("progress: %d/%d (ok=%d empty=%d err=%d) [%ds]",
                          i, total, status["extracted_ok"], status["extracted_empty"],

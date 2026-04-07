@@ -69,11 +69,26 @@ _status_lock = threading.Lock()
 
 
 def get_embed_status() -> dict:
-    with _status_lock:
-        s = dict(_embed_status)
-        if s["started_at"]:
+    import json as _json
+    status_file = os.path.join(os.path.dirname(__file__), "..", "data", "embed_status.json")
+    try:
+        with open(status_file) as f:
+            s = _json.load(f)
+        # Check if PID is still alive
+        if s.get("active") and s.get("pid"):
+            try:
+                os.kill(s["pid"], 0)
+            except OSError:
+                s["active"] = False
+                s["stage"] = "crashed"
+        if s.get("active") and s.get("started_at"):
             s["elapsed_s"] = round(time.time() - s["started_at"])
         return s
+    except FileNotFoundError:
+        return {"active": False, "stage": "idle", "processed": 0, "embedded_ok": 0,
+                "chunks_added": 0, "errors": 0, "total_queued": 0}
+    except Exception as e:
+        return {"active": False, "stage": "error", "error": str(e)}
 
 
 # ── Priority queue ────────────────────────────────────────────────────────────
@@ -280,10 +295,33 @@ def _run_embedding():
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def start_embedding(limit: int = MAX_PER_RUN) -> dict:
-    """Start background embedding. Returns immediately."""
-    t = threading.Thread(target=_run_embedding, daemon=True, name="nas-embed")
-    t.start()
-    return {"started": True, "message": f"Embedding started (up to {limit} files)"}
+    """Start embedding as a separate process (avoids GIL contention with uvicorn)."""
+    import subprocess, json as _json
+
+    status_file = os.path.join(os.path.dirname(__file__), "..", "data", "embed_status.json")
+
+    # Check if already running
+    try:
+        with open(status_file) as f:
+            st = _json.load(f)
+        if st.get("active") and st.get("pid"):
+            try:
+                os.kill(st["pid"], 0)
+                return {"started": False, "message": "Embedding already running (PID %d)" % st["pid"]}
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+    worker = os.path.join(os.path.dirname(__file__), "embed_worker.py")
+    venv_python = os.path.join(os.path.dirname(__file__), "..", "venv", "bin", "python3")
+    log_file = os.path.join(os.path.dirname(__file__), "..", "logs", "embed_worker.log")
+
+    with open(log_file, "a") as lf:
+        proc = subprocess.Popen([venv_python, worker], stdout=lf, stderr=lf,
+                                cwd=os.path.dirname(__file__))
+
+    return {"started": True, "message": "Embedding started in background (PID %d)" % proc.pid}
 
 
 def get_embed_stats() -> dict:
@@ -295,14 +333,16 @@ def get_embed_stats() -> dict:
         # Total files with text that could be embedded
         cur.execute("""
             SELECT COUNT(*) FROM nas_text
-            WHERE status='ok' AND char_count >= ?
+            WHERE status='ok' AND char_count >= ? AND char_count <= 500000
         """, [MIN_CHARS])
         embeddable = cur.fetchone()[0]
 
-        # Files already embedded (approximate — check uploads or nas_indexed metadata)
-        # We track via ChromaDB metadata, but for speed check the embed_status
-        cur.execute("SELECT COUNT(DISTINCT original_name) FROM uploads WHERE status='ready'")
-        already_embedded = cur.fetchone()[0]
+        # Files already embedded via embed_worker
+        try:
+            cur.execute("SELECT COUNT(*) FROM nas_embedded")
+            already_embedded = cur.fetchone()[0]
+        except Exception:
+            already_embedded = 0
 
     except Exception:
         embeddable = 0

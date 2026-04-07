@@ -264,6 +264,17 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     samesite="lax",
                     path="/",
                 )
+            # Also set access_token cookie for iframe/embed auth (preview, download)
+            access_token = json.loads(new_body).get("access_token")
+            if access_token:
+                response.set_cookie(
+                    key="access_token",
+                    value=access_token,
+                    httponly=True,
+                    samesite="lax",
+                    max_age=86400 * 7,
+                    path="/",
+                )
             return response
 
         return response
@@ -586,7 +597,7 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token = auth.create_access_token(user.id, user.username, user.role)
     audit("login_success", user_id=user.id, username=user.username, ip=ip)
-    return {
+    resp_data = {
         "access_token": token,
         "token_type": "bearer",
         "user": {
@@ -596,6 +607,16 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
             "role": user.role,
         },
     }
+    response = JSONResponse(content=resp_data)
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=86400 * 7,
+        path="/",
+    )
+    return response
 
 
 @app.get("/api/auth/me")
