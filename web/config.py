@@ -60,6 +60,22 @@ WHISPER_LANGUAGE: str = _get("WHISPER_LANGUAGE", "")  # empty = auto-detect
 MAX_UPLOAD_MB: int = int(_get("MAX_UPLOAD_MB", "500"))
 RAG_TOP_N: int = int(_get("RAG_TOP_N", "5"))
 
+
+# ── Cloud LLM (privacy-gated) ────────────────────────────────────────────────
+CLOUD_ENABLED: bool = _get("CLOUD_ENABLED", "false").lower() in ("true", "1", "yes")
+CLOUD_PROVIDER: str = _get("CLOUD_PROVIDER", "anthropic")     # "anthropic" | "openai"
+CLOUD_MODEL: str = _get("CLOUD_MODEL", "claude-sonnet-4-20250514")
+CLOUD_API_KEY: str = _get("CLOUD_API_KEY", "")
+CLOUD_MODE: str = _get("CLOUD_MODE", "fallback")              # "fallback" | "always" | "manual"
+SENSITIVITY_THRESHOLD: str = _get("SENSITIVITY_THRESHOLD", "YELLOW").upper()
+
+# ── Cloud LLM (privacy-gated) ────────────────────────────────────────────────
+CLOUD_ENABLED: bool = _get("CLOUD_ENABLED", "false").lower() in ("true", "1", "yes")
+CLOUD_PROVIDER: str = _get("CLOUD_PROVIDER", "anthropic")     # "anthropic" | "openai"
+CLOUD_MODEL: str = _get("CLOUD_MODEL", "claude-sonnet-4-20250514")
+CLOUD_API_KEY: str = _get("CLOUD_API_KEY", "")
+CLOUD_MODE: str = _get("CLOUD_MODE", "fallback")              # "fallback" | "always" | "manual"
+SENSITIVITY_THRESHOLD: str = _get("SENSITIVITY_THRESHOLD", "YELLOW").upper()
 # ── NAS paths (multiple comma-separated source directories) ─────────────────
 _nas_raw: str = _get("NAS_PATHS", "")
 NAS_PATHS: list[str] = [p.strip() for p in _nas_raw.split(",") if p.strip()]

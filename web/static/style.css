@@ -3859,3 +3859,23 @@ sup.cite-ref:hover { background: var(--gold-light); }
 }
 .lv-jump-bottom:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
 .lv-jump-bottom.hidden { display: none; }
+
+/* Cloud / Local source badges */
+.badge-cloud {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: help;
+}
+.badge-local {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: help;
+}

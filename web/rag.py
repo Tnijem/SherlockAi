@@ -933,6 +933,47 @@ def _nas_fallback_search(query: str, limit: int = 10) -> list[dict]:
 
     return results[:limit]
 
+
+
+def _is_complex_query(query: str) -> bool:
+    """Heuristic: does this query benefit from a stronger model?"""
+    q = query.lower()
+    if any(kw in q for kw in [
+        "compare", "contrast", "analyze the interplay",
+        "across all cases", "pattern", "trend",
+        "what are the strongest arguments",
+        "predict", "strategy", "synthesize",
+    ]):
+        return True
+    if len(query.split()) > 50:
+        return True
+    return False
+
+
+def _build_prompt_text(query, chunks, query_type, verbosity_role, research_mode, web_results):
+    """Build prompt text for cloud LLM (same format as local, but from args)."""
+    context_parts = []
+    for i, c in enumerate(chunks):
+        source = c.get("source", "unknown")
+        text = c.get("text", "")
+        chunk_idx = c.get("chunk", 0)
+        context_parts.append(f"[Doc: {source} | Chunk {chunk_idx}]\n{text}")
+
+    context = "\n\n---\n\n".join(context_parts) if context_parts else "(No documents found)"
+
+    web_context = ""
+    if web_results:
+        web_parts = [f"[Web: {w.get('title', '')}]\n{w.get('snippet', '')}" for w in web_results[:3]]
+        web_context = "\n\nWeb search results:\n" + "\n\n".join(web_parts)
+
+    return f"""Based on the following document excerpts, answer the user\'s question.
+
+{context}
+{web_context}
+
+User question: {query}"""
+
+
 async def stream_response(
     query: str,
     user_id: int,
@@ -1055,73 +1096,173 @@ async def stream_response(
         },
     )
 
+    # ── Hybrid routing: decide local vs cloud ────────────────────────────────
+    _use_cloud = False
+    try:
+        import cloud_llm
+        from config import CLOUD_MODE, CLOUD_ENABLED
+        if cloud_llm.cloud_available():
+            if CLOUD_MODE == "always":
+                _use_cloud = True
+            elif CLOUD_MODE == "fallback":
+                # Escalate if retrieval quality is low or query is complex
+                _use_cloud = (top_score < 0.40) or _is_complex_query(query)
+            # CLOUD_MODE == "manual": only via explicit override (future)
+    except Exception:
+        pass  # Cloud not available — use local
+
     t_llm = time.perf_counter()
-    with requests.post(
-        f"{OLLAMA_URL}/api/generate",
-        json={
-            "model":  LLM_MODEL,
-            "system": system_prompt,
-            "prompt": prompt,
-            "stream": True,
-            "options": {"num_predict": 8192},
-        },
-        stream=True,
-        timeout=600,
-    ) as resp:
-        resp.raise_for_status()
-        first = True
-        for line in resp.iter_lines():
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-            except Exception:
-                continue
-            token = data.get("response", "")
-            if token:
-                yield (token, sources if first else [])
-                first = False
-            if data.get("done"):
-                ms_llm   = _ms(t_llm)
-                ms_total = _ms(t_total)
-                # Extract Ollama token metrics from final chunk
-                prompt_tokens = data.get("prompt_eval_count", 0)
-                completion_tokens = data.get("eval_count", 0)
-                eval_duration_ns = data.get("eval_duration", 0)
-                tokens_per_sec = (
-                    round(completion_tokens / (eval_duration_ns / 1e9), 1)
-                    if eval_duration_ns > 0 else 0.0
-                )
-                log.info(
-                    "rag_query_done",
-                    extra={
-                        "user_id":             user_id,
-                        "query":               query[:120],
-                        "scope":               scope,
-                        "query_type":          query_type,
-                        "verbosity_role":      verbosity_role,
-                        "research_mode":       research_mode,
-                        "sources":             len(chunks),
-                        "web_results":         len(web_results),
-                        "top_score":           top_score,
-                        "latency_retrieve_ms": ms_retrieve,
-                        "latency_llm_ms":      ms_llm,
-                        "latency_total_ms":    ms_total,
-                        "prompt_tokens":       prompt_tokens,
-                        "completion_tokens":   completion_tokens,
-                        "tokens_per_sec":      tokens_per_sec,
-                    },
-                )
-                # Yield token stats as final metadata (empty token, no sources)
-                yield ("", [], {
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "total_tokens": prompt_tokens + completion_tokens,
-                    "tokens_per_sec": tokens_per_sec,
-                    "latency_llm_ms": ms_llm,
-                    "latency_total_ms": ms_total,
-                })
-                break
+
+    if _use_cloud:
+        # ── Cloud path: scrub → cloud API → re-identify ──────────────────
+        try:
+            from privacy_gateway import scrub_for_cloud, StreamReidentifier
+
+            scrub_result = scrub_for_cloud(query, chunks, system_prompt)
+            if scrub_result is None:
+                # RED sensitivity — fall back to local
+                log.info("rag_cloud_blocked: RED sensitivity, using local")
+                _use_cloud = False
+            else:
+                scrubbed_query, scrubbed_system, scrubbed_chunks, entity_map = scrub_result
+                # Build scrubbed prompt
+                scrubbed_prompt = _build_prompt_text(scrubbed_query, scrubbed_chunks, query_type, verbosity_role, research_mode, web_results)
+                reid = StreamReidentifier(entity_map)
+
+                log.info("rag_cloud_start: scrubbed %d entities", entity_map.entity_count)
+
+                first = True
+                cloud_tokens = 0
+                async for chunk in cloud_llm.stream_cloud_response(
+                    system_prompt=scrubbed_system,
+                    user_prompt=scrubbed_prompt,
+                ):
+                    if chunk["done"]:
+                        # Flush remaining buffer
+                        remaining = reid.flush()
+                        if remaining:
+                            yield (remaining, [])
+
+                        ms_llm = _ms(t_llm)
+                        ms_total = _ms(t_total)
+                        usage = chunk.get("usage", {})
+                        prompt_tokens = usage.get("input_tokens", 0)
+                        completion_tokens = usage.get("output_tokens", 0)
+                        cost_usd = usage.get("cost_usd", 0.0)
+                        tokens_per_sec = (
+                            round(completion_tokens / (ms_llm / 1000), 1)
+                            if ms_llm > 0 else 0.0
+                        )
+                        log.info(
+                            "rag_cloud_done",
+                            extra={
+                                "user_id": user_id,
+                                "query": query[:120],
+                                "provider": cloud_llm.get_cloud_config()["provider"],
+                                "model": cloud_llm.get_cloud_config()["model"],
+                                "entities_scrubbed": entity_map.entity_count,
+                                "prompt_tokens": prompt_tokens,
+                                "completion_tokens": completion_tokens,
+                                "cost_usd": round(cost_usd, 6),
+                                "tokens_per_sec": tokens_per_sec,
+                                "latency_llm_ms": ms_llm,
+                                "latency_total_ms": ms_total,
+                            },
+                        )
+                        yield ("", [], {
+                            "prompt_tokens": prompt_tokens,
+                            "completion_tokens": completion_tokens,
+                            "total_tokens": prompt_tokens + completion_tokens,
+                            "tokens_per_sec": tokens_per_sec,
+                            "latency_llm_ms": ms_llm,
+                            "latency_total_ms": ms_total,
+                            "source": "cloud",
+                            "cloud_provider": cloud_llm.get_cloud_config()["provider"],
+                            "cloud_model": cloud_llm.get_cloud_config()["model"],
+                            "entities_scrubbed": entity_map.entity_count,
+                            "cost_usd": round(cost_usd, 6),
+                        })
+                        return
+                    else:
+                        raw_token = chunk["token"]
+                        clean_token = reid.feed(raw_token)
+                        if clean_token:
+                            cloud_tokens += 1
+                            yield (clean_token, sources if first else [])
+                            first = False
+        except Exception as e:
+            log.warning("rag_cloud_error: %s — falling back to local", str(e)[:200])
+            _use_cloud = False
+
+    if not _use_cloud:
+        # ── Local Ollama path (default) ──────────────────────────────────────
+        with requests.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={
+                "model":  LLM_MODEL,
+                "system": system_prompt,
+                "prompt": prompt,
+                "stream": True,
+                "options": {"num_predict": 8192},
+            },
+            stream=True,
+            timeout=600,
+        ) as resp:
+            resp.raise_for_status()
+            first = True
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except Exception:
+                    continue
+                token = data.get("response", "")
+                if token:
+                    yield (token, sources if first else [])
+                    first = False
+                if data.get("done"):
+                    ms_llm   = _ms(t_llm)
+                    ms_total = _ms(t_total)
+                    # Extract Ollama token metrics from final chunk
+                    prompt_tokens = data.get("prompt_eval_count", 0)
+                    completion_tokens = data.get("eval_count", 0)
+                    eval_duration_ns = data.get("eval_duration", 0)
+                    tokens_per_sec = (
+                        round(completion_tokens / (eval_duration_ns / 1e9), 1)
+                        if eval_duration_ns > 0 else 0.0
+                    )
+                    log.info(
+                        "rag_query_done",
+                        extra={
+                            "user_id":             user_id,
+                            "query":               query[:120],
+                            "scope":               scope,
+                            "query_type":          query_type,
+                            "verbosity_role":      verbosity_role,
+                            "research_mode":       research_mode,
+                            "sources":             len(chunks),
+                            "web_results":         len(web_results),
+                            "top_score":           top_score,
+                            "latency_retrieve_ms": ms_retrieve,
+                            "latency_llm_ms":      ms_llm,
+                            "latency_total_ms":    ms_total,
+                            "prompt_tokens":       prompt_tokens,
+                            "completion_tokens":   completion_tokens,
+                            "tokens_per_sec":      tokens_per_sec,
+                        },
+                    )
+                    # Yield token stats as final metadata (empty token, no sources)
+                    yield ("", [], {
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": prompt_tokens + completion_tokens,
+                        "tokens_per_sec": tokens_per_sec,
+                        "latency_llm_ms": ms_llm,
+                        "latency_total_ms": ms_total,
+                        "source": "local",
+                    })
+                    break
 
 
 def extract_deadlines(

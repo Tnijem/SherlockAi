@@ -1149,7 +1149,10 @@ async function sendMessage(overrideText = null) {
                 `<span title="Completion tokens">${ts.completion_tokens || 0} out</span>` +
                 `<span title="Total tokens">${ts.total_tokens || 0} total</span>` +
                 `<span title="Generation speed">${ts.tokens_per_sec || 0} tok/s</span>` +
-                `<span title="LLM latency">${((ts.latency_llm_ms || 0) / 1000).toFixed(1)}s</span>`;
+                `<span title="LLM latency">${((ts.latency_llm_ms || 0) / 1000).toFixed(1)}s</span>` +
+                (ts.source === 'cloud'
+                  ? `<span class="badge-cloud" title="${ts.cloud_provider}/${ts.cloud_model} · ${ts.entities_scrubbed || 0} entities scrubbed · $${(ts.cost_usd || 0).toFixed(4)}">☁️ Cloud</span>`
+                  : `<span class="badge-local" title="Processed locally on-premise">🔒 Local</span>`);
               aiDiv.appendChild(statsDiv);
             }
           }
