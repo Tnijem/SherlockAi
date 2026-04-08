@@ -1987,6 +1987,165 @@ def admin_update_user(
     return {"updated": user_id}
 
 
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str
+
+
+@app.delete("/api/admin/users/{user_id}")
+def admin_delete_user(
+    user_id: int,
+    admin: User = Depends(auth.require_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    username = user.username
+    db.delete(user)
+    db.commit()
+    audit("user_delete", user_id=admin.id, username=admin.username,
+          detail=f"Deleted user '{username}' (id={user_id})")
+    return {"deleted": user_id}
+
+
+
+# ── Dictation Analysis ─────────────────────────────────────────────────────
+
+@app.get("/api/dictations")
+def list_dictations(
+    current_user: User = Depends(auth.get_current_user),
+):
+    """List all analyzed dictations with their tasks."""
+    import sqlite3
+    db_path = str(Path(DATA_DIR) / "dictations.db")
+    if not os.path.exists(db_path):
+        return {"dictations": [], "summary": {"total_files": 0, "total_tasks": 0, "pending": 0}}
+    db = sqlite3.connect(db_path, timeout=5)
+    db.row_factory = sqlite3.Row
+    dictations = []
+    for d in db.execute("SELECT * FROM dictations ORDER BY recorded_at DESC").fetchall():
+        tasks = []
+        for t in db.execute(
+            "SELECT * FROM dictation_tasks WHERE dictation_id = ? ORDER BY task_order", (d["id"],)
+        ).fetchall():
+            tasks.append({
+                "id": t["id"], "order": t["task_order"], "assignee": t["assignee"],
+                "action": t["action"], "client_or_case": t["client_or_case"],
+                "priority": t["priority"], "due_hint": t["due_hint"],
+                "status": t["status"], "notes": t["notes"],
+            })
+        dictations.append({
+            "id": d["id"], "file_name": d["file_name"],
+            "recorded_at": d["recorded_at"], "duration_secs": d["duration_secs"],
+            "transcript": d["transcript"], "task_count": len(tasks),
+            "status": d["status"], "tasks": tasks,
+        })
+    total_tasks = db.execute("SELECT COUNT(*) FROM dictation_tasks").fetchone()[0]
+    pending = db.execute("SELECT COUNT(*) FROM dictation_tasks WHERE status='pending'").fetchone()[0]
+    db.close()
+    return {
+        "dictations": dictations,
+        "summary": {"total_files": len(dictations), "total_tasks": total_tasks, "pending": pending},
+    }
+
+
+@app.get("/api/dictations/tasks")
+def list_dictation_tasks(
+    status: str = Query(default=None),
+    assignee: str = Query(default=None),
+    current_user: User = Depends(auth.get_current_user),
+):
+    """List tasks extracted from dictations, optionally filtered."""
+    import sqlite3
+    db_path = str(Path(DATA_DIR) / "dictations.db")
+    if not os.path.exists(db_path):
+        return []
+    db = sqlite3.connect(db_path, timeout=5)
+    db.row_factory = sqlite3.Row
+    query = """SELECT t.*, d.file_name, d.recorded_at FROM dictation_tasks t
+               JOIN dictations d ON d.id = t.dictation_id WHERE 1=1"""
+    params = []
+    if status:
+        query += " AND t.status = ?"
+        params.append(status)
+    if assignee:
+        query += " AND LOWER(t.assignee) = LOWER(?)"
+        params.append(assignee)
+    query += " ORDER BY d.recorded_at DESC, t.task_order"
+    rows = db.execute(query, params).fetchall()
+    db.close()
+    return [dict(r) for r in rows]
+
+
+@app.patch("/api/dictations/tasks/{task_id}")
+def update_dictation_task(
+    task_id: int,
+    body: dict,
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Update a dictation task (status, notes)."""
+    import sqlite3
+    db_path = str(Path(DATA_DIR) / "dictations.db")
+    db = sqlite3.connect(db_path, timeout=5)
+    task = db.execute("SELECT id FROM dictation_tasks WHERE id = ?", (task_id,)).fetchone()
+    if not task:
+        db.close()
+        raise HTTPException(status_code=404, detail="Task not found")
+    if "status" in body:
+        db.execute("UPDATE dictation_tasks SET status = ? WHERE id = ?", (body["status"], task_id))
+        if body["status"] == "completed":
+            db.execute("UPDATE dictation_tasks SET completed_at = ? WHERE id = ?",
+                       (datetime.utcnow().isoformat(), task_id))
+    if "notes" in body:
+        db.execute("UPDATE dictation_tasks SET notes = ? WHERE id = ?", (body["notes"], task_id))
+    db.commit()
+    db.close()
+    return {"updated": task_id}
+
+
+@app.get("/api/dictations/status")
+def dictation_worker_status(
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Get dictation worker status."""
+    status_path = str(Path(DATA_DIR) / "dictation_status.json")
+    if not os.path.exists(status_path):
+        return {"active": False}
+    try:
+        with open(status_path) as f:
+            info = json.load(f)
+        pid = info.get("pid")
+        if pid:
+            try:
+                os.kill(pid, 0)
+                info["active"] = True
+            except OSError:
+                info["active"] = False
+        return info
+    except Exception:
+        return {"active": False}
+
+
+@app.post("/api/dictations/scan")
+def trigger_dictation_scan(
+    _: User = Depends(auth.require_admin),
+):
+    """Trigger a one-time dictation scan (runs as subprocess)."""
+    import subprocess
+    worker = str(Path(__file__).parent / "dictation_worker.py")
+    venv_python = str(Path(__file__).resolve().parent.parent / "venv" / "bin" / "python3")
+    subprocess.Popen(
+        [venv_python, worker, "once"],
+        cwd=str(Path(__file__).parent),
+        stdout=open("/tmp/dictation_scan.log", "w"),
+        stderr=subprocess.STDOUT,
+    )
+    return {"started": True}
+
+
 # ── Indexing Activity Feed ─────────────────────────────────────────────────
 
 @app.get("/api/index-activity")

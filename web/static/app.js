@@ -456,7 +456,7 @@ function _logUnbindKeys() { document.removeEventListener('keydown', _logKeyHandl
 
 // ── View switching ────────────────────────────────────────────────────────────
 
-const VIEWS = ['chat', 'cases', 'upload', 'outputs', 'admin', 'config', 'logs'];
+const VIEWS = ['chat', 'cases', 'upload', 'outputs', 'dictations', 'admin', 'config', 'logs'];
 
 function showView(name) {
   // Stop log live-refresh when leaving logs view
@@ -480,7 +480,113 @@ function showView(name) {
   if (name === 'cases') renderCases();
   if (name === 'config') loadConfig();
   if (name === 'logs') initLogsView();
+  if (name === 'dictations') loadDictations();
 }
+
+
+// ── Dictations ────────────────────────────────────────────────────────────
+
+async function loadDictations() {
+  try {
+    const data = await api('GET', '/api/dictations');
+    const el = document.getElementById('dictationsList');
+    const sum = data.summary;
+    document.getElementById('dictationSummary').textContent =
+      sum.total_files + ' recordings, ' + sum.total_tasks + ' tasks, ' + sum.pending + ' pending';
+
+    // Build assignee filter
+    const assignees = new Set();
+    data.dictations.forEach(d => d.tasks.forEach(t => assignees.add(t.assignee)));
+    const sel = document.getElementById('dictFilterAssignee');
+    const curVal = sel.value;
+    sel.innerHTML = '<option value="">All Assignees</option>' +
+      [...assignees].sort().map(a => '<option value="' + a + '"' + (a === curVal ? ' selected' : '') + '>' + a + '</option>').join('');
+
+    const filterAssignee = curVal;
+
+    if (!data.dictations.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#127908;</div><p>No dictations analyzed yet.</p></div>';
+      return;
+    }
+
+    let html = '';
+    data.dictations.forEach(d => {
+      const tasks = filterAssignee ? d.tasks.filter(t => t.assignee === filterAssignee) : d.tasks;
+      if (filterAssignee && !tasks.length) return;
+      const date = d.recorded_at ? new Date(d.recorded_at).toLocaleString() : 'Unknown';
+      const dur = d.duration_secs ? d.duration_secs + 's' : '';
+      const hasUrgent = tasks.some(t => t.priority === 'urgent');
+
+      let taskRows = '';
+      tasks.forEach(t => {
+        const cls = (t.status === 'completed' ? ' task-done' : '') + (t.priority === 'urgent' ? ' task-urgent' : '');
+        const pri = t.priority === 'urgent' ? '<span class="tag tag-urgent">URGENT</span>' : '<span class="tag">normal</span>';
+        taskRows += '<tr class="' + cls + '">' +
+          '<td>' + t.order + '</td>' +
+          '<td><strong>' + escHtml(t.assignee) + '</strong></td>' +
+          '<td>' + escHtml(t.action) + '</td>' +
+          '<td class="muted">' + escHtml(t.client_or_case || '\u2014') + '</td>' +
+          '<td>' + pri + '</td>' +
+          '<td class="muted">' + escHtml(t.due_hint || '\u2014') + '</td>' +
+          '<td><select onchange="updateDictTask(' + t.id + ', this.value)" style="font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--surface);">' +
+            '<option value="pending"' + (t.status === 'pending' ? ' selected' : '') + '>Pending</option>' +
+            '<option value="in_progress"' + (t.status === 'in_progress' ? ' selected' : '') + '>In Progress</option>' +
+            '<option value="completed"' + (t.status === 'completed' ? ' selected' : '') + '>Completed</option>' +
+            '<option value="dismissed"' + (t.status === 'dismissed' ? ' selected' : '') + '>Dismissed</option>' +
+          '</select></td></tr>';
+      });
+
+      html += '<div class="dict-card">' +
+        '<div class="dict-header" onclick="this.parentElement.classList.toggle('expanded')">' +
+          '<div class="dict-meta">' +
+            '<span class="dict-date">' + date + '</span> ' +
+            '<span class="dict-dur">' + dur + '</span> ' +
+            '<span class="dict-count">' + tasks.length + ' task' + (tasks.length !== 1 ? 's' : '') + '</span> ' +
+            (hasUrgent ? '<span class="tag tag-urgent">URGENT</span>' : '') +
+          '</div>' +
+          '<div class="dict-fname muted">' + escHtml(d.file_name) + '</div>' +
+        '</div>' +
+        '<div class="dict-body">' +
+          '<div class="dict-transcript"><strong>Transcript:</strong> ' + escHtml(d.transcript || '') + '</div>' +
+          '<table class="dict-task-table"><thead><tr>' +
+            '<th>#</th><th>Assignee</th><th>Task</th><th>Case/Client</th><th>Priority</th><th>Due</th><th>Status</th>' +
+          '</tr></thead><tbody>' + taskRows + '</tbody></table>' +
+        '</div></div>';
+    });
+    el.innerHTML = html;
+  } catch (e) {
+    toast('Failed to load dictations: ' + e.message, 'error');
+  }
+}
+
+async function updateDictTask(taskId, newStatus) {
+  try {
+    await api('PATCH', '/api/dictations/tasks/' + taskId, { status: newStatus });
+    loadDictations();
+  } catch (e) {
+    toast('Update failed: ' + e.message, 'error');
+  }
+}
+
+async function scanDictations() {
+  const btn = document.getElementById('dictScanBtn');
+  btn.disabled = true;
+  btn.textContent = 'Scanning...';
+  try {
+    await api('POST', '/api/dictations/scan');
+    toast('Dictation scan started', 'success');
+    setTimeout(function() {
+      btn.disabled = false;
+      btn.textContent = 'Scan Now';
+      loadDictations();
+    }, 10000);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Scan Now';
+    toast('Scan failed: ' + e.message, 'error');
+  }
+}
+
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -1832,9 +1938,15 @@ async function loadUsers() {
         <td><span class="tag">${u.role}</span></td>
         <td>${u.active ? '&#9679;' : '<span style="color:var(--text-muted)">&#9675;</span>'}</td>
         <td class="muted">${u.last_login ? formatDate(u.last_login) : 'Never'}</td>
-        <td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
           <button class="btn" style="font-size:11px;padding:3px 8px;" onclick="toggleUserActive(${u.id}, ${u.active})">
             ${u.active ? 'Deactivate' : 'Activate'}
+          </button>
+          <button class="btn" style="font-size:11px;padding:3px 8px;" onclick="openResetPasswordModal(${u.id}, '${u.username.replace("'","\\'")}')">
+            Reset Pwd
+          </button>
+          <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;" onclick="confirmDeleteUser(${u.id}, '${u.username.replace("'","\\'")}')">
+            Delete
           </button>
         </td>
       </tr>
@@ -1874,6 +1986,33 @@ async function toggleUserActive(userId, currentlyActive) {
     loadUsers();
   } catch (e) {
     toast('Update failed: ' + e.message, 'error');
+  }
+}
+
+function openResetPasswordModal(userId, username) {
+  const newPwd = prompt(`Enter new password for "${username}":`);
+  if (!newPwd) return;
+  if (newPwd.length < 4) { toast('Password must be at least 4 characters', 'error'); return; }
+  resetUserPassword(userId, username, newPwd);
+}
+
+async function resetUserPassword(userId, username, newPassword) {
+  try {
+    await api('PATCH', `/api/admin/users/${userId}`, { new_password: newPassword });
+    toast(`Password reset for ${username}`, 'success');
+  } catch (e) {
+    toast('Password reset failed: ' + e.message, 'error');
+  }
+}
+
+async function confirmDeleteUser(userId, username) {
+  if (!confirm(`Are you sure you want to permanently delete user "${username}"?\n\nThis cannot be undone.`)) return;
+  try {
+    await api('DELETE', `/api/admin/users/${userId}`);
+    toast(`User "${username}" deleted`, 'success');
+    loadUsers();
+  } catch (e) {
+    toast('Delete failed: ' + e.message, 'error');
   }
 }
 

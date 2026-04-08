@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sherlock</title>
   <link rel="icon" type="image/svg+xml" id="favicon" href="/static/favicon-formal.svg">
-  <link rel="stylesheet" href="/static/style.css?v=10">
+  <link rel="stylesheet" href="/static/style.css?v=12">
 </head>
 <body>
 
@@ -29,6 +29,7 @@
       <button onclick="showView('admin')" id="nav-admin" class="hidden">Admin</button>
       <button onclick="showView('config')" id="nav-config" class="hidden">Config</button>
       <button onclick="showView('logs')" id="nav-logs" class="hidden">Logs</button>
+      <button onclick="showView('dictations')" id="nav-dictations">Dictations</button>
     </nav>
     <div class="header-right">
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Switch theme"></button>
@@ -506,6 +507,20 @@
       </div>
 
       <!-- Config View (admin only) -->
+      <div id="view-dictations" class="dictations-view hidden">
+        <div class="view-title" style="display:flex;justify-content:space-between;align-items:center;">
+          Dictations
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="dictationSummary" class="muted" style="font-size:13px;"></span>
+            <button class="btn" onclick="scanDictations()" id="dictScanBtn" style="font-size:12px;">Scan Now</button>
+            <select id="dictFilterAssignee" onchange="loadDictations()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);">
+              <option value="">All Assignees</option>
+            </select>
+          </div>
+        </div>
+        <div id="dictationsList"></div>
+      </div>
+
       <div id="view-config" class="config-view hidden">
         <div class="view-title">Configuration</div>
         <div id="configContent">
@@ -804,7 +819,7 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=10"></script>
+<script src="/static/app.js?v=12"></script>
 
 <!-- NAS Folder Browser Modal -->
 <div class="modal-overlay hidden" id="nasBrowserModal">
