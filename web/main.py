@@ -174,7 +174,24 @@ async def lifespan(app: FastAPI):
 
     _threading.Thread(target=_boot_catalog, daemon=True, name="catalog-boot").start()
     _threading.Thread(target=_boot_text, daemon=True, name="text-boot").start()
-    log_app.info("NAS catalog + text boot threads launched")
+
+    # Periodic NAS rescan — picks up new/modified files every 30 minutes
+    # (FSEvents/inotify don't work on SMB mounts, so we poll)
+    def _periodic_rescan():
+        import time as _t
+        _t.sleep(300)  # wait 5 min for initial boot to finish
+        while True:
+            try:
+                log_app.info("periodic_rescan: starting incremental catalog scan")
+                result = nas_catalog.start_catalog_scan(incremental=True)
+                new = result.get("new_files", 0) if isinstance(result, dict) else 0
+                log_app.info("periodic_rescan: done, %d new files", new)
+            except Exception as e:
+                log_app.warning("periodic_rescan_error: %s", e)
+            _t.sleep(1800)  # 30 minutes
+
+    _threading.Thread(target=_periodic_rescan, daemon=True, name="nas-rescan").start()
+    log_app.info("NAS catalog + text boot threads launched (rescan every 30m)")
 
     yield
 
@@ -2161,6 +2178,104 @@ def stream_dictation_audio(
     if not audio_path.is_file():
         raise HTTPException(status_code=404, detail="Audio file not found")
     return FileResponse(str(audio_path), media_type="audio/mp4", filename=file_name)
+
+
+@app.get("/api/dictations/vocab")
+def list_vocab_corrections(
+    current_user: User = Depends(auth.get_current_user),
+):
+    """List all vocabulary corrections."""
+    import sqlite3
+    db_path = str(Path(__file__).resolve().parent.parent / "data" / "dictations.db")
+    if not os.path.exists(db_path):
+        return []
+    db = sqlite3.connect(db_path, timeout=5)
+    db.row_factory = sqlite3.Row
+    rows = db.execute("SELECT * FROM vocab_corrections ORDER BY created_at DESC").fetchall()
+    db.close()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/dictations/vocab")
+def add_vocab_correction(
+    body: dict,
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Add a vocabulary correction. Applies to current transcript and teaches future transcriptions."""
+    import sqlite3
+    wrong = body.get("wrong", "").strip()
+    correct = body.get("correct", "").strip()
+    dictation_id = body.get("dictation_id")
+    if not wrong or not correct:
+        raise HTTPException(status_code=400, detail="Both 'wrong' and 'correct' are required")
+
+    db_path = str(Path(__file__).resolve().parent.parent / "data" / "dictations.db")
+    db = sqlite3.connect(db_path, timeout=10)
+
+    # 1. Save the correction to vocab table
+    try:
+        db.execute("INSERT OR IGNORE INTO vocab_corrections (wrong, correct, context, created_at) VALUES (?, ?, ?, ?)",
+                   (wrong, correct, body.get("context", ""), datetime.utcnow().isoformat()))
+        db.commit()
+    except Exception as e:
+        db.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    updated_ids = []
+
+    # 2. Apply correction to the specific transcript if dictation_id provided
+    if dictation_id:
+        row = db.execute("SELECT id, transcript FROM dictations WHERE id = ?", (dictation_id,)).fetchone()
+        if row and row[1]:
+            import re
+            new_transcript = re.sub(re.escape(wrong), correct, row[1], flags=re.IGNORECASE)
+            if new_transcript != row[1]:
+                db.execute("UPDATE dictations SET transcript = ? WHERE id = ?", (new_transcript, row[0]))
+                updated_ids.append(row[0])
+    else:
+        # Apply to ALL transcripts
+        for row in db.execute("SELECT id, transcript FROM dictations").fetchall():
+            if row[1]:
+                import re
+                new_transcript = re.sub(re.escape(wrong), correct, row[1], flags=re.IGNORECASE)
+                if new_transcript != row[1]:
+                    db.execute("UPDATE dictations SET transcript = ? WHERE id = ?", (new_transcript, row[0]))
+                    updated_ids.append(row[0])
+
+    db.commit()
+
+    # 3. Update the Whisper prompt file with the correct term
+    prompt_path = str(Path(__file__).resolve().parent.parent / "data" / "learned_vocab.txt")
+    existing = set()
+    if os.path.exists(prompt_path):
+        with open(prompt_path) as f:
+            existing = set(line.strip() for line in f if line.strip())
+    if correct not in existing:
+        existing.add(correct)
+        with open(prompt_path, "w") as f:
+            f.write("\n".join(sorted(existing)) + "\n")
+
+    db.close()
+    return {"saved": True, "wrong": wrong, "correct": correct,
+            "transcripts_updated": len(updated_ids)}
+
+
+@app.delete("/api/dictations/vocab/{vocab_id}")
+def delete_vocab_correction(
+    vocab_id: int,
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Delete a vocabulary correction."""
+    import sqlite3
+    db_path = str(Path(__file__).resolve().parent.parent / "data" / "dictations.db")
+    db = sqlite3.connect(db_path, timeout=5)
+    db.execute("DELETE FROM vocab_corrections WHERE id = ?", (vocab_id,))
+    db.commit()
+    db.close()
+    return {"deleted": vocab_id}
+
+
+
 
 
 

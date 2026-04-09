@@ -200,15 +200,44 @@ def get_whisper():
     return _whisper
 
 
+def _load_learned_vocab():
+    """Load user corrections to append to Whisper prompt."""
+    vocab_path = os.path.join(DATA_DIR, "learned_vocab.txt")
+    if os.path.exists(vocab_path):
+        with open(vocab_path) as f:
+            terms = [line.strip() for line in f if line.strip()]
+        if terms:
+            return " " + ", ".join(terms) + "."
+    return ""
+
+
+def _load_vocab_replacements():
+    """Load wrong->correct mappings to apply post-transcription."""
+    try:
+        db = sqlite3.connect(DB_PATH, timeout=5)
+        rows = db.execute("SELECT wrong, correct FROM vocab_corrections").fetchall()
+        db.close()
+        return rows
+    except Exception:
+        return []
+
+
 def transcribe(file_path: str) -> str:
     model = get_whisper()
+    prompt = WHISPER_PROMPT + _load_learned_vocab()
     segments, info = model.transcribe(
         file_path,
         beam_size=5,
         language="en",
-        initial_prompt=WHISPER_PROMPT,
+        initial_prompt=prompt,
     )
-    return " ".join(seg.text.strip() for seg in segments)
+    text = " ".join(seg.text.strip() for seg in segments)
+
+    # Apply known corrections post-transcription
+    for wrong, correct in _load_vocab_replacements():
+        text = re.sub(re.escape(wrong), correct, text, flags=re.IGNORECASE)
+
+    return text
 
 
 # ── Task Extraction via Ollama ──────────────────────────────────────────────

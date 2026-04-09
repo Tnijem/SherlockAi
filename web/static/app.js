@@ -549,7 +549,8 @@ async function loadDictations() {
         '</div>' +
         '<div class="dict-body">' +
           '<div class="dict-audio-player" id="audio-' + d.id + '"></div>' +
-          '<div class="dict-transcript"><strong>Transcript:</strong> ' + escHtml(d.transcript || '') + '</div>' +
+          '<div class="dict-transcript"><strong>Transcript:</strong> <span class="dict-transcript-text">' + escHtml(d.transcript || '') + '</span>' +
+          '<div style="margin-top:6px;text-align:right;"><button class="btn" style="font-size:11px;padding:3px 10px;" onclick="correctTranscript(' + d.id + ')">Correct Selection</button></div></div>' +
           '<table class="dict-task-table"><thead><tr>' +
             '<th>#</th><th>Assignee</th><th>Task</th><th>Case/Client</th><th>Priority</th><th>Due</th><th>Status</th>' +
           '</tr></thead><tbody>' + taskRows + '</tbody></table>' +
@@ -615,6 +616,29 @@ function playDictation(btn) {
 function browseCase(folderPath) {
   toast('Case folder: ' + folderPath, 'info');
 }
+
+function correctTranscript(dictId) {
+  var sel = window.getSelection();
+  var wrong = sel.toString().trim();
+  if (!wrong) {
+    toast('Select the incorrect word(s) in the transcript first, then click Correct', 'info');
+    return;
+  }
+  var correct = prompt('Correct "' + wrong + '" to:');
+  if (!correct || !correct.trim()) return;
+  api('POST', '/api/dictations/vocab', {
+    wrong: wrong,
+    correct: correct.trim(),
+    dictation_id: dictId
+  }).then(function(r) {
+    toast('"' + wrong + '" corrected to "' + correct.trim() + '" — Sherlock will remember this', 'success');
+    loadDictations();
+  }).catch(function(e) {
+    toast('Correction failed: ' + e.message, 'error');
+  });
+}
+
+
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
