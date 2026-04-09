@@ -917,6 +917,7 @@ class ChatRequest(BaseModel):
     verbosity_role: str = "attorney"  # "attorney" | "associate" | "paralegal" | "client"
     research_mode: bool = False   # True = include SearXNG web results
     history: list[dict] | None = None  # conversation history for follow-up rewriting
+    case_filter: dict | None = None   # {"category": "INJURY", "client_folder": "Abney, Caleb"}
 
 
 @app.post("/api/matters/{matter_id}/chat")
@@ -995,6 +996,7 @@ async def chat(
                 history=chat_history,
                 case_context=case_context,
                 matter_id=matter_id,
+                client_folder=body.case_filter.get("client_folder") if body.case_filter else None,
             ):
                 if len(chunk) == 3:
                     # Final stats tuple: (token, sources, stats_dict)
@@ -1065,6 +1067,7 @@ async def chat_ungated(
                 verbosity_role=body.verbosity_role,
                 research_mode=body.research_mode,
                 history=body.history or [],
+                client_folder=body.case_filter.get("client_folder") if body.case_filter else None,
             ):
                 if len(chunk) == 3:
                     token_stats = chunk[2]
@@ -3609,6 +3612,44 @@ def catalog_clients(
 ):
     """List client folders with file counts."""
     return {"clients": nas_catalog.get_client_list(category=category, limit=limit)}
+
+
+
+@app.post("/api/catalog/create-case")
+def create_case_folder(
+    body: dict,
+    _: User = Depends(auth.get_current_user),
+):
+    """Create a new client folder on the NAS."""
+    client_name = body.get("client_name", "").strip()
+    category = body.get("category", "INJURY").strip()
+    if not client_name:
+        raise HTTPException(status_code=400, detail="Client name is required")
+
+    from config import NAS_PATHS
+    base = None
+    for p in NAS_PATHS:
+        candidate = os.path.join(p, category)
+        if os.path.isdir(candidate):
+            base = candidate
+            break
+        # Try directly under Client Data
+        if os.path.isdir(p):
+            base = os.path.join(p, category)
+            break
+    if not base:
+        raise HTTPException(status_code=500, detail="NAS path not accessible")
+
+    folder_path = os.path.join(base, client_name)
+    if os.path.exists(folder_path):
+        return {"created": False, "path": folder_path, "message": "Folder already exists"}
+    try:
+        os.makedirs(folder_path, exist_ok=True)
+        audit("case_create", user_id=_.id, username=_.username,
+              detail=f"Created NAS folder: {folder_path}")
+        return {"created": True, "path": folder_path, "client_folder": client_name, "category": category}
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create folder: {e}")
 
 
 # ── NAS Text Extraction (Tier 2: full-text search) ───────────────────────────

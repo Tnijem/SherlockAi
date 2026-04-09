@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sherlock</title>
   <link rel="icon" type="image/svg+xml" id="favicon" href="/static/favicon-formal.svg">
-  <link rel="stylesheet" href="/static/style.css?v=18">
+  <link rel="stylesheet" href="/static/style.css?v=21">
 </head>
 <body>
 
@@ -23,7 +23,6 @@
     <div class="logo">SHERLOCK</div>
     <nav class="header-nav">
       <button class="active" onclick="showView('chat')" id="nav-chat">Chat</button>
-      <button onclick="showView('cases')" id="nav-cases">Cases</button>
       <button onclick="showView('upload')" id="nav-upload">Upload</button>
       <button onclick="showView('outputs')" id="nav-outputs">Outputs</button>
       <button onclick="showView('admin')" id="nav-admin" class="hidden">Admin</button>
@@ -110,17 +109,19 @@
           </div>
         </div>
 
-        <!-- Case context bar — visible only when matter is linked to a case -->
-        <div class="case-ctx-bar hidden" id="caseCtxBar">
-          <span class="case-ctx-icon">&#128193;</span>
-          <div class="case-ctx-info">
-            <span class="case-ctx-name" id="caseCtxName"></span>
-            <span class="case-ctx-meta" id="caseCtxMeta"></span>
+        <!-- Case selector — drives all queries -->
+        <div class="case-selector-bar" id="caseSelectorBar">
+          <span class="case-selector-icon">&#128193;</span>
+          <div class="case-search-wrap" id="caseSearchWrap">
+            <input type="text" class="case-search-input" id="caseSearchInput"
+                   placeholder="All Cases — type to search..."
+                   autocomplete="off"
+                   onfocus="openCaseDropdown()"
+                   oninput="filterCaseDropdown(this.value)">
+            <div class="case-dropdown hidden" id="caseDropdown"></div>
           </div>
-          <div class="case-ctx-scope">
-            <button class="ctx-scope-btn" data-scope="case" onclick="setScope('case')" id="ctxScopeCase">This Case</button>
-            <button class="ctx-scope-btn" data-scope="all" onclick="setScope('all')" id="ctxScopeAll">All Files</button>
-          </div>
+          <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="openNewCaseModal()">+ New Case</button>
+          <span class="case-selector-meta" id="caseSelectorMeta"></span>
         </div>
 
         <!-- Matter files panel -->
@@ -819,7 +820,7 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=18"></script>
+<script src="/static/app.js?v=21"></script>
 
 <!-- NAS Folder Browser Modal -->
 <div class="modal-overlay hidden" id="nasBrowserModal">
@@ -836,5 +837,30 @@
 </div>
 
 
+
+<!-- New Case Modal -->
+<div class="modal-overlay hidden" id="newCaseModal">
+  <div class="modal-card" style="max-width:480px;">
+    <div class="modal-title">Create New Case</div>
+    <label class="modal-label">Client Name (Last, First)</label>
+    <input id="newCaseClient" placeholder="e.g. Smith, John" class="modal-input">
+    <label class="modal-label">Category</label>
+    <select id="newCaseCategory" class="modal-input">
+      <option value="INJURY">Personal Injury</option>
+      <option value="CRIMINAL">Criminal</option>
+      <option value="BUSINESS">Business</option>
+      <option value="DIVORCE">Divorce</option>
+      <option value="PROBATE">Probate</option>
+      <option value="WILLS">Wills</option>
+      <option value="MEDICAL MALPRACTICE">Medical Malpractice</option>
+      <option value="WORKERS COMPENSATION">Workers Compensation</option>
+    </select>
+    <div id="newCaseError" class="hidden" style="color:#f44336;font-size:12px;margin-top:6px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn" onclick="closeModal('newCaseModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createNewCase()">Create</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

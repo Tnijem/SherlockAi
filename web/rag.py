@@ -984,6 +984,7 @@ async def stream_response(
     history: list[dict] | None = None,
     case_context: dict | None = None,
     matter_id: int | None = None,
+    client_folder: str | None = None,
 ) -> AsyncIterator[tuple]:
     """
     Yields (token, sources) tuples during streaming.
@@ -1002,6 +1003,16 @@ async def stream_response(
         raw_chunks = retrieve_matter_chunks(search_query, user_id, matter_id, scope)
     else:
         raw_chunks = retrieve(search_query, user_id, scope)
+
+    # Filter by client_folder if a specific case is selected
+    if client_folder and chunks:
+        folder_lower = client_folder.lower()
+        filtered = [c for c in chunks if folder_lower in c.get("path", "").lower() or folder_lower in c.get("source", "").lower()]
+        if filtered:
+            chunks = filtered
+            log.info("case_filter: %d/%d chunks match client '%s'", len(filtered), len(chunks) + len(filtered) - len(filtered), client_folder)
+        else:
+            log.info("case_filter: no chunks match client '%s', using all %d", client_folder, len(chunks))
     ms_retrieve = _ms(t_retrieve)
 
     # ── Score threshold: drop chunks too dissimilar to be useful ──────────────

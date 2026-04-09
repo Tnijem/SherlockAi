@@ -15,6 +15,7 @@ const state = {
   researchMode: false,
   researchAvailable: false,
   streaming: false,
+  activeCase: localStorage.getItem('sherlock_active_case') || 'all',
   uploadJobs: {},
   csrfToken: null,
   chatHistory: [],  // last N turns for follow-up rewriting (ungated chat only)
@@ -90,6 +91,12 @@ async function apiUpload(path, formData) {
 window.addEventListener('DOMContentLoaded', () => {
   if (!state.token || !state.user) { window.location.href = '/login'; return; }
 
+  // Restore last active view on refresh
+  var savedView = localStorage.getItem('sherlock_view');
+  if (savedView && VIEWS.indexOf(savedView) !== -1 && savedView !== 'chat') {
+    setTimeout(function() { showView(savedView); }, 0);
+  }
+
   document.getElementById('userPill').textContent = state.user.display_name || state.user.username;
 
   if (state.user.role === 'admin') {
@@ -99,6 +106,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   initTheme();
+  loadCaseSelector();
   loadMatters();
   loadCases();
   loadHistory();
@@ -456,7 +464,7 @@ function _logUnbindKeys() { document.removeEventListener('keydown', _logKeyHandl
 
 // ── View switching ────────────────────────────────────────────────────────────
 
-const VIEWS = ['chat', 'cases', 'upload', 'outputs', 'dictations', 'admin', 'config', 'logs'];
+const VIEWS = ['chat', 'upload', 'outputs', 'dictations', 'admin', 'config', 'logs'];
 
 function showView(name) {
   // Stop log live-refresh when leaving logs view
@@ -468,6 +476,7 @@ function showView(name) {
     document.getElementById('logLiveLabel')?.classList.remove('active');
   }
 
+  localStorage.setItem('sherlock_view', name);
   VIEWS.forEach(v => {
     document.getElementById(`view-${v}`)?.classList.toggle('hidden', v !== name);
     document.getElementById(`nav-${v}`)?.classList.toggle('active', v === name);
@@ -624,21 +633,201 @@ function correctTranscript(dictId) {
     toast('Select the incorrect word(s) in the transcript first, then click Correct', 'info');
     return;
   }
+  // Capture the card and transcript span BEFORE prompt() steals focus/selection
+  var node = sel.anchorNode;
+  var card = node ? (node.closest ? node.closest('.dict-card') : node.parentElement ? node.parentElement.closest('.dict-card') : null) : null;
+  var span = card ? card.querySelector('.dict-transcript-text') : null;
+
   var correct = prompt('Correct "' + wrong + '" to:');
   if (!correct || !correct.trim()) return;
+  var corrected = correct.trim();
   api('POST', '/api/dictations/vocab', {
     wrong: wrong,
-    correct: correct.trim(),
+    correct: corrected,
     dictation_id: dictId
   }).then(function(r) {
-    toast('"' + wrong + '" corrected to "' + correct.trim() + '" — Sherlock will remember this', 'success');
-    loadDictations();
+    toast('"' + wrong + '" corrected to "' + corrected + '" — Sherlock will remember this', 'success');
+    // Update transcript text in-place without collapsing the card
+    if (span) {
+      span.textContent = span.textContent.split(wrong).join(corrected);
+    }
   }).catch(function(e) {
     toast('Correction failed: ' + e.message, 'error');
   });
 }
 
 
+
+
+// ── Case Selector ─────────────────────────────────────────────────────────
+
+var _caseList = []; // cached for filtering
+
+async function loadCaseSelector() {
+  try {
+    var data = await api('GET', '/api/catalog/clients?limit=2000');
+    _caseList = (data.clients || []).map(function(c) {
+      return {
+        key: (c.category || 'Other') + '/' + c.client_folder,
+        label: c.client_folder,
+        category: c.category || 'Other',
+        file_count: c.file_count
+      };
+    }).sort(function(a, b) { return a.label.localeCompare(b.label); });
+
+    // Restore input display
+    var input = document.getElementById('caseSearchInput');
+    if (state.activeCase && state.activeCase !== 'all') {
+      var match = _caseList.find(function(c) { return c.key === state.activeCase; });
+      if (match) input.value = match.label;
+      else input.value = '';
+    } else {
+      input.value = '';
+      input.placeholder = 'All Cases (' + _caseList.length + ' clients) — type to search...';
+    }
+
+    updateCaseMeta();
+  } catch (e) {
+    console.warn('Failed to load case selector:', e);
+  }
+}
+
+function openCaseDropdown() {
+  filterCaseDropdown(document.getElementById('caseSearchInput').value);
+  document.getElementById('caseDropdown').classList.remove('hidden');
+}
+
+function closeCaseDropdown() {
+  setTimeout(function() {
+    document.getElementById('caseDropdown').classList.add('hidden');
+  }, 200);
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#caseSearchWrap')) {
+    document.getElementById('caseDropdown').classList.add('hidden');
+  }
+});
+
+function filterCaseDropdown(query) {
+  var dd = document.getElementById('caseDropdown');
+  var q = (query || '').toLowerCase();
+
+  var html = '<div class="case-dd-item" onclick="selectCase(\x27all\x27)"><strong>All Cases</strong> <span class="muted">(' + _caseList.length + ' clients)</span></div>';
+
+  // Group filtered results by category
+  var byCategory = {};
+  _caseList.forEach(function(c) {
+    if (q && c.label.toLowerCase().indexOf(q) === -1 && c.category.toLowerCase().indexOf(q) === -1) return;
+    if (!byCategory[c.category]) byCategory[c.category] = [];
+    byCategory[c.category].push(c);
+  });
+
+  var categories = Object.keys(byCategory).sort();
+  var totalShown = 0;
+  categories.forEach(function(cat) {
+    html += '<div class="case-dd-category">' + escHtml(cat) + '</div>';
+    byCategory[cat].forEach(function(c) {
+      if (totalShown >= 50) return; // limit visible items
+      var active = (c.key === state.activeCase) ? ' case-dd-active' : '';
+      html += '<div class="case-dd-item' + active + '" onclick="selectCase(\x27' + c.key.replace(/'/g, "\\'") + '\x27)">' +
+        escHtml(c.label) + ' <span class="muted">(' + c.file_count + ')</span></div>';
+      totalShown++;
+    });
+  });
+
+  if (totalShown === 0 && q) {
+    html += '<div class="case-dd-empty">No cases matching "' + escHtml(q) + '"</div>';
+  }
+
+  dd.innerHTML = html;
+  dd.classList.remove('hidden');
+}
+
+function selectCase(key) {
+  var input = document.getElementById('caseSearchInput');
+  if (key === 'all') {
+    input.value = '';
+    input.placeholder = 'All Cases (' + _caseList.length + ' clients) — type to search...';
+  } else {
+    var match = _caseList.find(function(c) { return c.key === key; });
+    input.value = match ? match.label : key;
+  }
+  document.getElementById('caseDropdown').classList.add('hidden');
+  onCaseSelected(key);
+}
+
+function onCaseSelected(value) {
+  state.activeCase = value;
+  localStorage.setItem('sherlock_active_case', value);
+  updateCaseMeta();
+
+  // Update scope automatically
+  if (value === 'all') {
+    setScope('all');
+  } else {
+    setScope('case');
+  }
+}
+
+function updateCaseMeta() {
+  var meta = document.getElementById('caseSelectorMeta');
+  var title = document.getElementById('chatMatterTitle');
+  if (state.activeCase === 'all') {
+    meta.textContent = 'Searching all indexed documents';
+    if (title && !state.activeMatterId) title.textContent = 'All Cases';
+  } else {
+    var parts = state.activeCase.split('/');
+    var cat = parts[0];
+    var client = parts.slice(1).join('/');
+    meta.textContent = cat + ' — ' + client;
+    if (title && !state.activeMatterId) title.textContent = client;
+  }
+}
+
+function getActiveCaseClient() {
+  // Returns {category, client_folder} or null
+  if (!state.activeCase || state.activeCase === 'all') return null;
+  var parts = state.activeCase.split('/');
+  return { category: parts[0], client_folder: parts.slice(1).join('/') };
+}
+
+function openNewCaseModal() {
+  document.getElementById('newCaseClient').value = '';
+  document.getElementById('newCaseError').classList.add('hidden');
+  document.getElementById('newCaseModal').classList.remove('hidden');
+}
+
+async function createNewCase() {
+  var client = document.getElementById('newCaseClient').value.trim();
+  var category = document.getElementById('newCaseCategory').value;
+  var errEl = document.getElementById('newCaseError');
+  if (!client) {
+    errEl.textContent = 'Client name is required';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  try {
+    var result = await api('POST', '/api/catalog/create-case', {
+      client_name: client, category: category
+    });
+    closeModal('newCaseModal');
+    if (result.created) {
+      toast('Case folder created: ' + category + '/' + client, 'success');
+    } else {
+      toast('Folder already exists — selecting it', 'info');
+    }
+    // Reload and select the new case
+    await loadCaseSelector();
+    var key = category + '/' + client;
+    document.getElementById('caseSelector').value = key;
+    onCaseSelected(key);
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  }
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -1258,6 +1447,7 @@ async function sendMessage(overrideText = null) {
         verbosity_role: state.verbosityRole,
         research_mode: state.researchMode,
         history: state.activeMatterId ? [] : state.chatHistory.slice(-6),
+        case_filter: getActiveCaseClient(),
       }),
       signal: state.abortController.signal,
     });
