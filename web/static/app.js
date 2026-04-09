@@ -525,7 +525,7 @@ async function loadDictations() {
           '<td>' + t.order + '</td>' +
           '<td><strong>' + escHtml(t.assignee) + '</strong></td>' +
           '<td>' + escHtml(t.action) + '</td>' +
-          '<td class="muted">' + escHtml(t.client_or_case || '\u2014') + '</td>' +
+          '<td class="muted">' + (t.case_folder ? '<a href="#" class="case-link" onclick="event.preventDefault();browseCase(\x27' + escHtml(t.case_folder) + '\x27)" title="' + escHtml(t.case_folder) + '">' + escHtml(t.client_or_case) + ' &#128206;</a>' : escHtml(t.client_or_case || '\u2014')) + '</td>' +
           '<td>' + pri + '</td>' +
           '<td class="muted">' + escHtml(t.due_hint || '\u2014') + '</td>' +
           '<td><select onchange="updateDictTask(' + t.id + ', this.value)" style="font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--surface);">' +
@@ -537,8 +537,9 @@ async function loadDictations() {
       });
 
       html += '<div class="dict-card">' +
-        '<div class="dict-header" onclick="this.parentElement.classList.toggle('expanded')">' +
+        '<div class="dict-header" data-action="toggle-dict">' +
           '<div class="dict-meta">' +
+            '<button class="btn dict-play-btn" data-audio="' + encodeURIComponent(d.file_name) + '" onclick="event.stopPropagation();playDictation(this)" title="Play audio">&#9654;</button> ' +
             '<span class="dict-date">' + date + '</span> ' +
             '<span class="dict-dur">' + dur + '</span> ' +
             '<span class="dict-count">' + tasks.length + ' task' + (tasks.length !== 1 ? 's' : '') + '</span> ' +
@@ -547,6 +548,7 @@ async function loadDictations() {
           '<div class="dict-fname muted">' + escHtml(d.file_name) + '</div>' +
         '</div>' +
         '<div class="dict-body">' +
+          '<div class="dict-audio-player" id="audio-' + d.id + '"></div>' +
           '<div class="dict-transcript"><strong>Transcript:</strong> ' + escHtml(d.transcript || '') + '</div>' +
           '<table class="dict-task-table"><thead><tr>' +
             '<th>#</th><th>Assignee</th><th>Task</th><th>Case/Client</th><th>Priority</th><th>Due</th><th>Status</th>' +
@@ -587,6 +589,32 @@ async function scanDictations() {
   }
 }
 
+
+
+document.addEventListener('click', function(e) {
+  var hdr = e.target.closest('[data-action="toggle-dict"]');
+  if (hdr) hdr.parentElement.classList.toggle('expanded');
+});
+
+
+function playDictation(btn) {
+  var fname = decodeURIComponent(btn.dataset.audio);
+  var card = btn.closest('.dict-card');
+  var player = card.querySelector('.dict-audio-player');
+  if (player.querySelector('audio')) {
+    var audio = player.querySelector('audio');
+    if (audio.paused) { audio.play(); btn.innerHTML = '&#9646;&#9646;'; }
+    else { audio.pause(); btn.innerHTML = '&#9654;'; }
+    return;
+  }
+  player.innerHTML = '<audio controls autoplay style="width:100%;margin-bottom:8px;" onplay="this.closest(\'.dict-card\').querySelector(\'.dict-play-btn\').innerHTML=\'\&#9646;\&#9646;\';" onpause="this.closest(\'.dict-card\').querySelector(\'.dict-play-btn\').innerHTML=\'&#9654;\';" onended="this.closest(\'.dict-card\').querySelector(\'.dict-play-btn\').innerHTML=\'&#9654;\';"><source src="/api/dictations/audio/' + encodeURIComponent(fname) + '" type="audio/mp4">Your browser does not support audio.</audio>';
+  btn.innerHTML = '&#9646;&#9646;';
+  if (!card.classList.contains('expanded')) card.classList.add('expanded');
+}
+
+function browseCase(folderPath) {
+  toast('Case folder: ' + folderPath, 'info');
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -1942,10 +1970,10 @@ async function loadUsers() {
           <button class="btn" style="font-size:11px;padding:3px 8px;" onclick="toggleUserActive(${u.id}, ${u.active})">
             ${u.active ? 'Deactivate' : 'Activate'}
           </button>
-          <button class="btn" style="font-size:11px;padding:3px 8px;" onclick="openResetPasswordModal(${u.id}, '${u.username.replace("'","\\'")}')">
+          <button class="btn" style="font-size:11px;padding:3px 8px;" data-uid="${u.id}" data-uname="${escHtml(u.username)}" onclick="openResetPasswordModal(+this.dataset.uid, this.dataset.uname)">
             Reset Pwd
           </button>
-          <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;" onclick="confirmDeleteUser(${u.id}, '${u.username.replace("'","\\'")}')">
+          <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;" data-uid="${u.id}" data-uname="${escHtml(u.username)}" onclick="confirmDeleteUser(+this.dataset.uid, this.dataset.uname)">
             Delete
           </button>
         </td>

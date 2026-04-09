@@ -3880,6 +3880,8 @@ sup.cite-ref:hover { background: var(--gold-light); }
   cursor: help;
 }
 
+.dictations-view { padding: 32px; overflow-y: auto; }
+
 /* Dictation cards */
 .dict-card {
   background: var(--surface);
@@ -3945,3 +3947,17 @@ sup.cite-ref:hover { background: var(--gold-light); }
   font-size: 10px;
   font-weight: 700;
 }
+
+.dict-play-btn {
+  width: 28px; height: 28px;
+  padding: 0; font-size: 14px; line-height: 28px;
+  text-align: center; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  border: none; cursor: pointer;
+  flex-shrink: 0;
+}
+.dict-play-btn:hover { opacity: 0.85; }
+.dict-audio-player { padding: 0; }
+.dict-audio-player audio { border-radius: 8px; }
+.case-link { color: var(--accent); text-decoration: none; }
+.case-link:hover { text-decoration: underline; }

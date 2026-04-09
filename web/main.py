@@ -2020,7 +2020,7 @@ def list_dictations(
 ):
     """List all analyzed dictations with their tasks."""
     import sqlite3
-    db_path = str(Path(DATA_DIR) / "dictations.db")
+    db_path = str(Path(__file__).resolve().parent.parent / "data" / "dictations.db")
     if not os.path.exists(db_path):
         return {"dictations": [], "summary": {"total_files": 0, "total_tasks": 0, "pending": 0}}
     db = sqlite3.connect(db_path, timeout=5)
@@ -2034,6 +2034,7 @@ def list_dictations(
             tasks.append({
                 "id": t["id"], "order": t["task_order"], "assignee": t["assignee"],
                 "action": t["action"], "client_or_case": t["client_or_case"],
+                "case_folder": t["case_folder"] if "case_folder" in t.keys() else None,
                 "priority": t["priority"], "due_hint": t["due_hint"],
                 "status": t["status"], "notes": t["notes"],
             })
@@ -2060,7 +2061,7 @@ def list_dictation_tasks(
 ):
     """List tasks extracted from dictations, optionally filtered."""
     import sqlite3
-    db_path = str(Path(DATA_DIR) / "dictations.db")
+    db_path = str(Path(__file__).resolve().parent.parent / "data" / "dictations.db")
     if not os.path.exists(db_path):
         return []
     db = sqlite3.connect(db_path, timeout=5)
@@ -2088,7 +2089,7 @@ def update_dictation_task(
 ):
     """Update a dictation task (status, notes)."""
     import sqlite3
-    db_path = str(Path(DATA_DIR) / "dictations.db")
+    db_path = str(Path(__file__).resolve().parent.parent / "data" / "dictations.db")
     db = sqlite3.connect(db_path, timeout=5)
     task = db.execute("SELECT id FROM dictation_tasks WHERE id = ?", (task_id,)).fetchone()
     if not task:
@@ -2111,7 +2112,7 @@ def dictation_worker_status(
     current_user: User = Depends(auth.get_current_user),
 ):
     """Get dictation worker status."""
-    status_path = str(Path(DATA_DIR) / "dictation_status.json")
+    status_path = str(Path(__file__).resolve().parent.parent / "data" / "dictation_status.json")
     if not os.path.exists(status_path):
         return {"active": False}
     try:
@@ -2144,6 +2145,24 @@ def trigger_dictation_scan(
         stderr=subprocess.STDOUT,
     )
     return {"started": True}
+
+
+@app.get("/api/dictations/audio/{file_name}")
+def stream_dictation_audio(
+    file_name: str,
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Stream a dictation audio file for browser playback."""
+    import re as _rr
+    if not _rr.match(r'^DEFAULT_\d+_\w+\.m4a$', file_name):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    dictate_dir = os.environ.get("DICTATE_DIR", os.path.expanduser("~/NAS/uDictate"))
+    audio_path = Path(dictate_dir) / file_name
+    if not audio_path.is_file():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    return FileResponse(str(audio_path), media_type="audio/mp4", filename=file_name)
+
+
 
 
 # ── Indexing Activity Feed ─────────────────────────────────────────────────
