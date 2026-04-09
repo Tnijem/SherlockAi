@@ -2122,9 +2122,101 @@ def update_dictation_task(
                        (datetime.utcnow().isoformat(), task_id))
     if "notes" in body:
         db.execute("UPDATE dictation_tasks SET notes = ? WHERE id = ?", (body["notes"], task_id))
+    if "assignee" in body:
+        db.execute("UPDATE dictation_tasks SET assignee = ? WHERE id = ?", (body["assignee"], task_id))
+    if "action" in body:
+        db.execute("UPDATE dictation_tasks SET action = ? WHERE id = ?", (body["action"], task_id))
+    if "client_or_case" in body:
+        db.execute("UPDATE dictation_tasks SET client_or_case = ? WHERE id = ?", (body["client_or_case"], task_id))
+    if "priority" in body:
+        db.execute("UPDATE dictation_tasks SET priority = ? WHERE id = ?", (body["priority"], task_id))
+    if "due_hint" in body:
+        db.execute("UPDATE dictation_tasks SET due_hint = ? WHERE id = ?", (body["due_hint"], task_id))
     db.commit()
     db.close()
     return {"updated": task_id}
+
+
+
+
+# ── Assignee Management ─────────────────────────────────────────────────────
+
+@app.get("/api/dictations/assignees")
+def list_assignees(current_user: User = Depends(auth.get_current_user)):
+    """List all known assignees."""
+    import sqlite3
+    db_path = str(Path(__file__).resolve().parent.parent / "data" / "dictations.db")
+    if not os.path.exists(db_path):
+        return []
+    db = sqlite3.connect(db_path, timeout=5)
+    db.execute("""CREATE TABLE IF NOT EXISTS assignees (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        role TEXT DEFAULT '',
+        active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now'))
+    )""")
+    db.commit()
+    db.row_factory = sqlite3.Row
+    rows = db.execute("SELECT * FROM assignees ORDER BY name").fetchall()
+    db.close()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/dictations/assignees")
+def add_assignee(body: dict, _: User = Depends(auth.require_admin)):
+    """Add a new assignee."""
+    import sqlite3
+    name = body.get("name", "").strip()
+    role = body.get("role", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name required")
+    db_path = str(Path(__file__).resolve().parent.parent / "data" / "dictations.db")
+    db = sqlite3.connect(db_path, timeout=5)
+    db.execute("""CREATE TABLE IF NOT EXISTS assignees (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        role TEXT DEFAULT '',
+        active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now'))
+    )""")
+    try:
+        db.execute("INSERT INTO assignees (name, role) VALUES (?, ?)", (name, role))
+        db.commit()
+    except sqlite3.IntegrityError:
+        db.close()
+        raise HTTPException(status_code=409, detail="Assignee already exists")
+    db.close()
+    return {"added": name}
+
+
+@app.patch("/api/dictations/assignees/{assignee_id}")
+def update_assignee(assignee_id: int, body: dict, _: User = Depends(auth.require_admin)):
+    """Update an assignee (name, role, active status)."""
+    import sqlite3
+    db_path = str(Path(__file__).resolve().parent.parent / "data" / "dictations.db")
+    db = sqlite3.connect(db_path, timeout=5)
+    if "name" in body:
+        db.execute("UPDATE assignees SET name = ? WHERE id = ?", (body["name"], assignee_id))
+    if "role" in body:
+        db.execute("UPDATE assignees SET role = ? WHERE id = ?", (body["role"], assignee_id))
+    if "active" in body:
+        db.execute("UPDATE assignees SET active = ? WHERE id = ?", (1 if body["active"] else 0, assignee_id))
+    db.commit()
+    db.close()
+    return {"updated": assignee_id}
+
+
+@app.delete("/api/dictations/assignees/{assignee_id}")
+def delete_assignee(assignee_id: int, _: User = Depends(auth.require_admin)):
+    """Delete an assignee."""
+    import sqlite3
+    db_path = str(Path(__file__).resolve().parent.parent / "data" / "dictations.db")
+    db = sqlite3.connect(db_path, timeout=5)
+    db.execute("DELETE FROM assignees WHERE id = ?", (assignee_id,))
+    db.commit()
+    db.close()
+    return {"deleted": assignee_id}
 
 
 @app.get("/api/dictations/status")
@@ -2148,6 +2240,41 @@ def dictation_worker_status(
         return info
     except Exception:
         return {"active": False}
+
+
+
+@app.post("/api/dictations/{dictation_id}/reprocess")
+def reprocess_dictation(
+    dictation_id: int,
+    _: User = Depends(auth.require_admin),
+):
+    """Delete a dictation record and re-run transcription + analysis for that file."""
+    import sqlite3, subprocess
+    db_path = str(Path(__file__).resolve().parent.parent / "data" / "dictations.db")
+    if not os.path.exists(db_path):
+        raise HTTPException(status_code=404, detail="No dictation database")
+    db = sqlite3.connect(db_path, timeout=5)
+    db.row_factory = sqlite3.Row
+    row = db.execute("SELECT file_name FROM dictations WHERE id = ?", (dictation_id,)).fetchone()
+    if not row:
+        db.close()
+        raise HTTPException(status_code=404, detail="Dictation not found")
+    file_name = row["file_name"]
+    db.execute("DELETE FROM dictation_tasks WHERE dictation_id = ?", (dictation_id,))
+    db.execute("DELETE FROM dictations WHERE id = ?", (dictation_id,))
+    db.commit()
+    db.close()
+
+    # Re-run the worker in "once" mode - it will pick up the now-missing file as new
+    worker = str(Path(__file__).parent / "dictation_worker.py")
+    venv_python = str(Path(__file__).resolve().parent.parent / "venv" / "bin" / "python3")
+    subprocess.Popen(
+        [venv_python, worker, "once"],
+        cwd=str(Path(__file__).parent),
+        stdout=open("/tmp/dictation_reprocess.log", "w"),
+        stderr=subprocess.STDOUT,
+    )
+    return {"reprocessing": True, "file_name": file_name}
 
 
 @app.post("/api/dictations/scan")

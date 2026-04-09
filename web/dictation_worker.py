@@ -243,7 +243,7 @@ def transcribe(file_path: str) -> str:
 # ── Task Extraction via Ollama ──────────────────────────────────────────────
 EXTRACT_PROMPT = """You are an AI assistant for a law firm run by attorney Sam Dennis. Below is a transcription of a voice dictation from Sam to his staff. Sam often gives multiple instructions in a single recording.
 
-His staff includes: Terry (paralegal), Tara (remote assistant), Nicole, Jeremy, Blake, Luke Claus, Hala, Aaron Dobby.
+{staff_list}
 
 Extract each distinct task/instruction as a JSON array. For each task:
 - "assignee": who should do it (e.g. "Tara", "Terry", or "unknown" if unclear)
@@ -264,9 +264,35 @@ TRANSCRIPTION:
 {transcript}"""
 
 
+def _load_assignees() -> str:
+    """Load assignees from DB for the extraction prompt."""
+    db_path = os.path.join(DATA_DIR, "dictations.db")
+    fallback = "Terry (paralegal), Tara (remote assistant), Nicole, Jeremy, Blake, Luke Claus, Hala, Aaron Dobby"
+    if not os.path.exists(db_path):
+        return fallback
+    try:
+        import sqlite3
+        db = sqlite3.connect(db_path, timeout=5)
+        db.row_factory = sqlite3.Row
+        rows = db.execute("SELECT name, role FROM assignees WHERE active = 1 ORDER BY name").fetchall()
+        db.close()
+        if not rows:
+            return fallback
+        parts = []
+        for r in rows:
+            if r["role"]:
+                parts.append(f"{r['name']} ({r['role']})")
+            else:
+                parts.append(r["name"])
+        return ", ".join(parts)
+    except Exception:
+        return fallback
+
+
 def extract_tasks(transcript: str) -> list[dict]:
     import urllib.request
-    prompt = EXTRACT_PROMPT.format(transcript=transcript)
+    staff = _load_assignees()
+    prompt = EXTRACT_PROMPT.format(transcript=transcript, staff_list="His staff includes: " + staff + ".")
     payload = json.dumps({
         "model": OLLAMA_MODEL,
         "prompt": prompt,

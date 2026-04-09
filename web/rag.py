@@ -233,6 +233,7 @@ def retrieve(
     user_id: int,
     scope: str = "all",   # "all" | "global" | "user" | "both" | "case_{id}_docs"
     n: int = RAG_TOP_N,
+    client_folder: str | None = None,
 ) -> list[dict]:
     """Return top-N relevant chunks across requested collections."""
     if not _validate_scope(scope, user_id):
@@ -280,13 +281,24 @@ def retrieve(
         _add(scope)
         _add(GLOBAL_COLLECTION)
 
+    # Build ChromaDB where filter for client_folder scoping
+    where_filter = None
+    if client_folder:
+        where_filter = {"client_folder": client_folder}
+
     for coll in collections_to_query:
         try:
-            res = coll.query(
+            count = coll.count()
+            if count == 0:
+                continue
+            query_kwargs = dict(
                 query_embeddings=[embedding],
-                n_results=min(n, coll.count()),
+                n_results=min(n, count),
                 include=["documents", "metadatas", "distances"],
             )
+            if where_filter:
+                query_kwargs["where"] = where_filter
+            res = coll.query(**query_kwargs)
             for doc, meta, dist in zip(
                 res["documents"][0],
                 res["metadatas"][0],
@@ -1002,17 +1014,7 @@ async def stream_response(
     if matter_id:
         raw_chunks = retrieve_matter_chunks(search_query, user_id, matter_id, scope)
     else:
-        raw_chunks = retrieve(search_query, user_id, scope)
-
-    # Filter by client_folder if a specific case is selected
-    if client_folder and chunks:
-        folder_lower = client_folder.lower()
-        filtered = [c for c in chunks if folder_lower in c.get("path", "").lower() or folder_lower in c.get("source", "").lower()]
-        if filtered:
-            chunks = filtered
-            log.info("case_filter: %d/%d chunks match client '%s'", len(filtered), len(chunks) + len(filtered) - len(filtered), client_folder)
-        else:
-            log.info("case_filter: no chunks match client '%s', using all %d", client_folder, len(chunks))
+        raw_chunks = retrieve(search_query, user_id, scope, client_folder=client_folder)
     ms_retrieve = _ms(t_retrieve)
 
     # ── Score threshold: drop chunks too dissimilar to be useful ──────────────
@@ -1285,6 +1287,14 @@ def extract_deadlines(
     Run a deadline-extraction pass over the indexed documents.
     Returns list of {date_str, description, dl_type, source_file, urgency}.
     """
+
+    # When case selector provides client_folder, use "all" scope for retrieval
+    # and let post-filter narrow by path. Bare "case" scope is invalid without case_id.
+    if scope == "case" and client_folder:
+        scope = "all"
+    elif scope == "case":
+        scope = "both"
+
     chunks = retrieve(query_context or "deadlines filing dates statutes of limitations notices", user_id=user_id, scope=scope, n=12)
     if not chunks:
         return []

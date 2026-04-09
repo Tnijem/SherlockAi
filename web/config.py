@@ -88,7 +88,7 @@ OUTPUT_MIRROR_PATHS: list[str] = [p.strip() for p in _mirror_raw.split(",") if p
 SYSTEM_NAME: str = _get("SYSTEM_NAME", "Sherlock")
 
 # ── ChromaDB collection names ────────────────────────────────────────────────
-GLOBAL_COLLECTION: str = "sherlock_cases"
+GLOBAL_COLLECTION: str = "sherlock_global"
 
 
 def user_collection(user_id: int) -> str:

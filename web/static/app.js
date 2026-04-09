@@ -495,16 +495,116 @@ function showView(name) {
 
 // ── Dictations ────────────────────────────────────────────────────────────
 
+
+var _assigneeList = [];
+
+async function loadAssignees() {
+  try {
+    _assigneeList = await api('GET', '/api/dictations/assignees');
+  } catch (e) { _assigneeList = []; }
+}
+
+function buildAssigneeOptions(current) {
+  var known = _assigneeList.filter(function(a) { return a.active; }).map(function(a) { return a.name; });
+  // Always include the current value even if not in the managed list
+  if (current && known.indexOf(current) === -1) known.push(current);
+  known.sort();
+  var opts = '<option value="">(unassigned)</option>';
+  known.forEach(function(name) {
+    opts += '<option value="' + escHtml(name) + '"' + (name === current ? ' selected' : '') + '>' + escHtml(name) + '</option>';
+  });
+  return opts;
+}
+
+async function updateDictTaskField(taskId, field, value) {
+  try {
+    var body = {};
+    body[field] = value;
+    await api('PATCH', '/api/dictations/tasks/' + taskId, body);
+    toast('Task updated', 'success');
+  } catch (e) {
+    toast('Update failed: ' + e.message, 'error');
+  }
+}
+
+function openAssigneeManager() {
+  var modal = document.getElementById('assigneeModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  renderAssigneeList();
+}
+
+function closeAssigneeModal() {
+  var modal = document.getElementById('assigneeModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function renderAssigneeList() {
+  var el = document.getElementById('assigneeListBody');
+  if (!el) return;
+  var html = '';
+  _assigneeList.forEach(function(a) {
+    html += '<tr>' +
+      '<td>' + escHtml(a.name) + '</td>' +
+      '<td>' + escHtml(a.role || '') + '</td>' +
+      '<td>' + (a.active ? 'Active' : '<span class="muted">Inactive</span>') + '</td>' +
+      '<td style="text-align:right;">' +
+        '<button class="btn" style="font-size:11px;padding:2px 8px;margin-right:4px;" onclick="toggleAssigneeActive(' + a.id + ',' + (a.active ? 'false' : 'true') + ')">' + (a.active ? 'Deactivate' : 'Activate') + '</button>' +
+        '<button class="btn btn-danger" style="font-size:11px;padding:2px 8px;" onclick="deleteAssignee(' + a.id + ')">Delete</button>' +
+      '</td></tr>';
+  });
+  if (!html) html = '<tr><td colspan="4" class="muted" style="text-align:center;">No assignees configured. Add one below.</td></tr>';
+  el.innerHTML = html;
+}
+
+async function addAssignee() {
+  var nameEl = document.getElementById('newAssigneeName');
+  var roleEl = document.getElementById('newAssigneeRole');
+  var name = nameEl.value.trim();
+  var role = roleEl.value.trim();
+  if (!name) { toast('Enter a name', 'error'); return; }
+  try {
+    await api('POST', '/api/dictations/assignees', { name: name, role: role });
+    nameEl.value = '';
+    roleEl.value = '';
+    await loadAssignees();
+    renderAssigneeList();
+    toast('Assignee added', 'success');
+  } catch (e) {
+    toast('Failed: ' + e.message, 'error');
+  }
+}
+
+async function toggleAssigneeActive(id, active) {
+  try {
+    await api('PATCH', '/api/dictations/assignees/' + id, { active: active });
+    await loadAssignees();
+    renderAssigneeList();
+  } catch (e) { toast('Failed: ' + e.message, 'error'); }
+}
+
+async function deleteAssignee(id) {
+  if (!confirm('Delete this assignee?')) return;
+  try {
+    await api('DELETE', '/api/dictations/assignees/' + id);
+    await loadAssignees();
+    renderAssigneeList();
+    toast('Assignee deleted', 'success');
+  } catch (e) { toast('Failed: ' + e.message, 'error'); }
+}
+
 async function loadDictations() {
   try {
+    if (!_assigneeList.length) await loadAssignees();
     const data = await api('GET', '/api/dictations');
     const el = document.getElementById('dictationsList');
     const sum = data.summary;
     document.getElementById('dictationSummary').textContent =
       sum.total_files + ' recordings, ' + sum.total_tasks + ' tasks, ' + sum.pending + ' pending';
 
-    // Build assignee filter
+    // Build assignee filter (merge task assignees + managed list)
     const assignees = new Set();
+    _assigneeList.filter(function(a) { return a.active; }).forEach(function(a) { assignees.add(a.name); });
     data.dictations.forEach(d => d.tasks.forEach(t => assignees.add(t.assignee)));
     const sel = document.getElementById('dictFilterAssignee');
     const curVal = sel.value;
@@ -532,7 +632,7 @@ async function loadDictations() {
         const pri = t.priority === 'urgent' ? '<span class="tag tag-urgent">URGENT</span>' : '<span class="tag">normal</span>';
         taskRows += '<tr class="' + cls + '">' +
           '<td>' + t.order + '</td>' +
-          '<td><strong>' + escHtml(t.assignee) + '</strong></td>' +
+          '<td><select onchange="updateDictTaskField(' + t.id + ', \'assignee\', this.value)" style="font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--surface);font-weight:600;">' + buildAssigneeOptions(t.assignee) + '</select></td>' +
           '<td>' + escHtml(t.action) + '</td>' +
           '<td class="muted">' + (t.case_folder ? '<a href="#" class="case-link" onclick="event.preventDefault();browseCase(\x27' + escHtml(t.case_folder) + '\x27)" title="' + escHtml(t.case_folder) + '">' + escHtml(t.client_or_case) + ' &#128206;</a>' : escHtml(t.client_or_case || '\u2014')) + '</td>' +
           '<td>' + pri + '</td>' +
@@ -559,7 +659,9 @@ async function loadDictations() {
         '<div class="dict-body">' +
           '<div class="dict-audio-player" id="audio-' + d.id + '"></div>' +
           '<div class="dict-transcript"><strong>Transcript:</strong> <span class="dict-transcript-text">' + escHtml(d.transcript || '') + '</span>' +
-          '<div style="margin-top:6px;text-align:right;"><button class="btn" style="font-size:11px;padding:3px 10px;" onclick="correctTranscript(' + d.id + ')">Correct Selection</button></div></div>' +
+          '<div style="margin-top:6px;text-align:right;">' +
+          '<button class="btn" style="font-size:11px;padding:3px 10px;margin-right:6px;" onclick="reprocessDictation(' + d.id + ')">\u21bb Re-process</button>' +
+          '<button class="btn" style="font-size:11px;padding:3px 10px;" onclick="correctTranscript(' + d.id + ')">Correct Selection</button></div></div>' +
           '<table class="dict-task-table"><thead><tr>' +
             '<th>#</th><th>Assignee</th><th>Task</th><th>Case/Client</th><th>Priority</th><th>Due</th><th>Status</th>' +
           '</tr></thead><tbody>' + taskRows + '</tbody></table>' +
@@ -617,8 +719,20 @@ function playDictation(btn) {
     else { audio.pause(); btn.innerHTML = '&#9654;'; }
     return;
   }
-  player.innerHTML = '<audio controls autoplay style="width:100%;margin-bottom:8px;" onplay="this.closest(\'.dict-card\').querySelector(\'.dict-play-btn\').innerHTML=\'\&#9646;\&#9646;\';" onpause="this.closest(\'.dict-card\').querySelector(\'.dict-play-btn\').innerHTML=\'&#9654;\';" onended="this.closest(\'.dict-card\').querySelector(\'.dict-play-btn\').innerHTML=\'&#9654;\';"><source src="/api/dictations/audio/' + encodeURIComponent(fname) + '" type="audio/mp4">Your browser does not support audio.</audio>';
-  btn.innerHTML = '&#9646;&#9646;';
+  var audio = document.createElement('audio');
+  audio.controls = true;
+  audio.autoplay = true;
+  audio.style.cssText = 'width:100%;margin-bottom:8px;';
+  var source = document.createElement('source');
+  source.src = '/api/dictations/audio/' + encodeURIComponent(fname);
+  source.type = 'audio/mp4';
+  audio.appendChild(source);
+  audio.addEventListener('play', function() { btn.innerHTML = '\u23F8'; });
+  audio.addEventListener('pause', function() { btn.innerHTML = '\u25B6'; });
+  audio.addEventListener('ended', function() { btn.innerHTML = '\u25B6'; });
+  player.innerHTML = '';
+  player.appendChild(audio);
+  btn.innerHTML = '\u23F8';
   if (!card.classList.contains('expanded')) card.classList.add('expanded');
 }
 
@@ -655,6 +769,19 @@ function correctTranscript(dictId) {
     toast('Correction failed: ' + e.message, 'error');
   });
 }
+
+async function reprocessDictation(dictId) {
+  if (!confirm('Re-process this dictation? It will be re-transcribed and re-analyzed.')) return;
+  try {
+    toast('Re-processing dictation...', 'info');
+    await api('POST', '/api/dictations/' + dictId + '/reprocess');
+    toast('Re-processing started. Refresh in ~30s to see updated results.', 'success');
+    setTimeout(function() { loadDictations(); }, 5000);
+  } catch (e) {
+    toast('Re-process failed: ' + e.message, 'error');
+  }
+}
+
 
 
 
@@ -1020,29 +1147,27 @@ function selectMatter(id) {
   document.getElementById('editTaskBtn').classList.toggle('hidden', !matter);
   document.getElementById('exportBtn').classList.toggle('hidden', !matter);
 
-  // Case context bar
+  // Case context bar (elements may not exist if Cases tab was removed)
   const ctxBar = document.getElementById('caseCtxBar');
   const caseScopeBtn = document.getElementById('scopeCaseBtn');
 
   if (matter?.case_id) {
-    // Populate context bar
-    document.getElementById('caseCtxName').textContent = matter.case_name || `Case #${matter.case_id}`;
+    const ctxName = document.getElementById('caseCtxName');
+    if (ctxName) ctxName.textContent = matter.case_name || `Case #${matter.case_id}`;
     const metaParts = [];
     if (matter.case_number) metaParts.push(matter.case_number);
     if (matter.case_type)   metaParts.push(matter.case_type);
     if (matter.client_name) metaParts.push(`Client: ${matter.client_name}`);
     if (matter.opposing_party) metaParts.push(`vs. ${matter.opposing_party}`);
-    document.getElementById('caseCtxMeta').textContent = metaParts.join('  ·  ');
-    ctxBar.classList.remove('hidden');
+    const ctxMeta = document.getElementById('caseCtxMeta');
+    if (ctxMeta) ctxMeta.textContent = metaParts.join('  ·  ');
+    if (ctxBar) ctxBar.classList.remove('hidden');
+    if (caseScopeBtn) caseScopeBtn.classList.remove('hidden');
 
-    // Old scope toggle — keep in sync
-    caseScopeBtn.classList.remove('hidden');
-
-    // Auto-scope to this case when entering a case-linked matter
     setScope('case');
   } else {
-    ctxBar.classList.add('hidden');
-    caseScopeBtn.classList.add('hidden');
+    if (ctxBar) ctxBar.classList.add('hidden');
+    if (caseScopeBtn) caseScopeBtn.classList.add('hidden');
     if (state.scope === 'case') setScope('all');
   }
 

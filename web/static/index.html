@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sherlock</title>
   <link rel="icon" type="image/svg+xml" id="favicon" href="/static/favicon-formal.svg">
-  <link rel="stylesheet" href="/static/style.css?v=21">
+  <link rel="stylesheet" href="/static/style.css?v=22">
 </head>
 <body>
 
@@ -514,6 +514,7 @@
           <div style="display:flex;gap:8px;align-items:center;">
             <span id="dictationSummary" class="muted" style="font-size:13px;"></span>
             <button class="btn" onclick="scanDictations()" id="dictScanBtn" style="font-size:12px;">Scan Now</button>
+            <button class="btn" onclick="openAssigneeManager()" style="font-size:12px;">Manage Assignees</button>
             <select id="dictFilterAssignee" onchange="loadDictations()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);">
               <option value="">All Assignees</option>
             </select>
@@ -820,7 +821,7 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=21"></script>
+<script src="/static/app.js?v=26"></script>
 
 <!-- NAS Folder Browser Modal -->
 <div class="modal-overlay hidden" id="nasBrowserModal">
@@ -862,5 +863,26 @@
     </div>
   </div>
 </div>
+
+    <!-- Assignee Manager Modal -->
+    <div id="assigneeModal" class="modal-overlay hidden">
+      <div class="modal" style="max-width:560px;">
+        <div class="modal-header">
+          <h3>Manage Assignees</h3>
+          <button class="modal-close" onclick="closeAssigneeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <table class="dict-task-table" style="margin-bottom:16px;">
+            <thead><tr><th>Name</th><th>Role</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
+            <tbody id="assigneeListBody"></tbody>
+          </table>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="newAssigneeName" placeholder="Name" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);">
+            <input type="text" id="newAssigneeRole" placeholder="Role (optional)" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);">
+            <button class="btn" onclick="addAssignee()">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
 </body>
 </html>
