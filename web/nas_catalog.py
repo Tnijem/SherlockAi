@@ -68,6 +68,11 @@ CREATE TRIGGER IF NOT EXISTS catalog_fts_update AFTER UPDATE ON nas_catalog BEGI
     INSERT INTO nas_catalog_fts(rowid, filename, client_folder, parent_dir, category)
     VALUES (new.id, new.filename, new.client_folder, new.parent_dir, new.category);
 END;
+
+CREATE TABLE IF NOT EXISTS dir_mtimes (
+    dir_path TEXT PRIMARY KEY,
+    mtime    REAL NOT NULL
+);
 """
 
 # ── Initialization ────────────────────────────────────────────────────────────
@@ -145,11 +150,76 @@ def get_scan_status() -> dict:
     return s
 
 
+def _collect_changed_dirs(nas_paths: list[str], saved_mtimes: dict) -> tuple[list[str], dict]:
+    """
+    Check directory mtimes at top 2 levels (category/client) to find which
+    client folders changed. Only stats ~500 directories over SMB (~1-2s)
+    instead of recursively walking the entire tree.
+
+    When a client folder is flagged as changed, the scanner will do a full
+    recursive walk of just that one client folder.
+    """
+    changed = []
+    new_mtimes = {}
+
+    for nas_path in nas_paths:
+        root = nas_path.rstrip("/")
+        if not os.path.isdir(root):
+            continue
+
+        # Check root dir itself
+        try:
+            mtime = os.stat(root).st_mtime
+            new_mtimes[root] = mtime
+            if saved_mtimes.get(root) is None or abs(saved_mtimes[root] - mtime) >= 1:
+                changed.append(root)
+        except Exception:
+            continue
+
+        # Level 1: category dirs (INJURY, CRIMINAL, etc.) or direct client dirs
+        try:
+            level1 = [e for e in os.scandir(root)
+                       if e.is_dir() and not e.name.startswith('.') and e.name != '#recycle']
+        except Exception:
+            continue
+
+        for entry1 in level1:
+            try:
+                mtime = entry1.stat().st_mtime
+            except Exception:
+                continue
+            new_mtimes[entry1.path] = mtime
+            old = saved_mtimes.get(entry1.path)
+            if old is None or abs(old - mtime) >= 1:
+                changed.append(entry1.path)
+
+            # Level 2: client folders inside category dirs
+            try:
+                level2 = [e for e in os.scandir(entry1.path)
+                           if e.is_dir() and not e.name.startswith('.') and e.name != '#recycle']
+            except Exception:
+                continue
+
+            for entry2 in level2:
+                try:
+                    mtime2 = entry2.stat().st_mtime
+                except Exception:
+                    continue
+                new_mtimes[entry2.path] = mtime2
+                old2 = saved_mtimes.get(entry2.path)
+                if old2 is None or abs(old2 - mtime2) >= 1:
+                    changed.append(entry2.path)
+
+    return changed, new_mtimes
+
+
 def _scan_nas_paths(nas_paths: list[str], incremental: bool = True):
     """
     Walk NAS paths and catalog all files.
 
-    If incremental=True (default), skip files already in catalog with same mtime.
+    Smart incremental mode: checks directory mtimes first (~1s over SMB),
+    then only walks into directories that actually changed. Falls back to
+    full walk for non-incremental scans.
     """
     global _scan_status
     _scan_status.update({
@@ -185,78 +255,162 @@ def _scan_nas_paths(nas_paths: list[str], incremental: bool = True):
             _scan_status["errors"] += 1
         batch.clear()
 
-    # Build existing file set for incremental mode
-    existing = {}
-    if incremental:
-        _scan_status["stage"] = "loading_existing"
+    def _process_file(fp, fname, root):
+        """Process a single file for cataloging."""
         try:
-            cur.execute("SELECT file_path, mtime FROM nas_catalog")
-            existing = {row[0]: row[1] for row in cur.fetchall()}
-            log.info("catalog_existing: %d files in catalog", len(existing))
+            st = os.stat(fp)
+        except Exception:
+            _scan_status["errors"] += 1
+            return
+
+        mtime = st.st_mtime
+        ext = os.path.splitext(fname)[1].lower()
+        client_folder, category = _detect_client_folder(fp, root)
+        parent_dir = os.path.basename(os.path.dirname(fp))
+        mtime_date = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+
+        batch.append((
+            fp, fname, ext, st.st_size, mtime, mtime_date,
+            client_folder, category, parent_dir, now,
+        ))
+
+        if len(batch) >= BATCH_SIZE:
+            _flush_batch()
+
+    # ── Smart incremental: directory-level mtime check ──────────────────
+    if incremental:
+        _scan_status["stage"] = "checking_dirs"
+        log.info("catalog_smart_scan: checking directory mtimes...")
+
+        # Load saved directory mtimes
+        saved_mtimes = {}
+        try:
+            cur.execute("SELECT dir_path, mtime FROM dir_mtimes")
+            saved_mtimes = {row[0]: row[1] for row in cur.fetchall()}
+        except Exception:
+            pass  # table may not exist yet on first run
+
+        changed_dirs, all_dir_mtimes = _collect_changed_dirs(nas_paths, saved_mtimes)
+
+        log.info("catalog_smart_scan: %d dirs checked, %d changed in %.1fs",
+                 len(all_dir_mtimes), len(changed_dirs),
+                 time.time() - _scan_status["started_at"])
+
+        if not changed_dirs:
+            # Save dir mtimes and exit early — nothing changed
+            try:
+                cur.executemany(
+                    "INSERT OR REPLACE INTO dir_mtimes (dir_path, mtime) VALUES (?, ?)",
+                    list(all_dir_mtimes.items())
+                )
+                conn.commit()
+            except Exception:
+                pass
+            conn.close()
+            elapsed = int(time.time() - _scan_status["started_at"])
+            _scan_status.update({
+                "active": False,
+                "stage": "done",
+                "elapsed_s": elapsed,
+            })
+            log.info("catalog_done: no changes detected, %ds", elapsed)
+            return
+
+        _scan_status["stage"] = "scanning_changed"
+        log.info("catalog_smart_scan: scanning %d changed directories...", len(changed_dirs))
+
+        # Recursively scan files in changed directories and their subdirs
+        for changed_dir in changed_dirs:
+            # Determine which NAS root this dir belongs to
+            root = ""
+            for nas_path in nas_paths:
+                r = nas_path.rstrip("/")
+                if changed_dir.startswith(r):
+                    root = r
+                    break
+
+            for dirpath, dirnames, filenames in os.walk(changed_dir):
+                dirnames[:] = [
+                    d for d in dirnames
+                    if not d.startswith('.') and d != '#recycle' and d != 'Thumbs.db'
+                ]
+                for fname in filenames:
+                    if fname.startswith('.') or fname == 'Thumbs.db' or fname == 'AUTORUN.INF':
+                        continue
+                    if fname.startswith('~$'):
+                        continue
+
+                    _scan_status["total_found"] += 1
+                    _process_file(os.path.join(dirpath, fname), fname, root)
+
+        _flush_batch()
+
+        # Save updated dir mtimes
+        try:
+            cur.executemany(
+                "INSERT OR REPLACE INTO dir_mtimes (dir_path, mtime) VALUES (?, ?)",
+                list(all_dir_mtimes.items())
+            )
+            conn.commit()
+        except Exception as e:
+            log.warning("catalog_save_dir_mtimes_error: %s", e)
+
+    else:
+        # ── Full scan: walk everything ──────────────────────────────────
+        _scan_status["stage"] = "walking"
+
+        for nas_path in nas_paths:
+            root = nas_path.rstrip("/")
+            if not os.path.isdir(root):
+                log.warning("catalog_skip_root: %s not accessible", root)
+                continue
+
+            log.info("catalog_walking: %s", root)
+
+            for dirpath, dirnames, filenames in os.walk(root):
+                dirnames[:] = [
+                    d for d in dirnames
+                    if not d.startswith('.') and d != '#recycle' and d != 'Thumbs.db'
+                ]
+
+                for fname in filenames:
+                    if fname.startswith('.') or fname == 'Thumbs.db' or fname == 'AUTORUN.INF':
+                        continue
+                    if fname.startswith('~$'):
+                        continue
+
+                    _scan_status["total_found"] += 1
+                    _process_file(os.path.join(dirpath, fname), fname, root)
+
+                    if _scan_status["total_found"] % 10000 == 0:
+                        log.info("catalog_progress: %d found, %d inserted, %d skipped",
+                                 _scan_status["total_found"],
+                                 _scan_status["total_inserted"],
+                                 _scan_status["total_skipped"])
+
+        _flush_batch()
+
+        # Save all dir mtimes after full scan
+        all_mtimes = {}
+        for nas_path in nas_paths:
+            root = nas_path.rstrip("/")
+            if not os.path.isdir(root):
+                continue
+            for dirpath, dirnames, _ in os.walk(root):
+                dirnames[:] = [d for d in dirnames if not d.startswith('.') and d != '#recycle']
+                try:
+                    all_mtimes[dirpath] = os.stat(dirpath).st_mtime
+                except Exception:
+                    pass
+        try:
+            cur.executemany(
+                "INSERT OR REPLACE INTO dir_mtimes (dir_path, mtime) VALUES (?, ?)",
+                list(all_mtimes.items())
+            )
+            conn.commit()
         except Exception:
             pass
 
-    _scan_status["stage"] = "walking"
-
-    for nas_path in nas_paths:
-        root = nas_path.rstrip("/")
-        if not os.path.isdir(root):
-            log.warning("catalog_skip_root: %s not accessible", root)
-            continue
-
-        log.info("catalog_walking: %s", root)
-
-        for dirpath, dirnames, filenames in os.walk(root):
-            # Skip hidden dirs and recycle bins
-            dirnames[:] = [
-                d for d in dirnames
-                if not d.startswith('.') and d != '#recycle' and d != 'Thumbs.db'
-            ]
-
-            for fname in filenames:
-                if fname.startswith('.') or fname == 'Thumbs.db' or fname == 'AUTORUN.INF':
-                    continue
-                # Skip Office temp/lock files (~$filename.docx)
-                if fname.startswith('~$'):
-                    continue
-
-                _scan_status["total_found"] += 1
-                fp = os.path.join(dirpath, fname)
-
-                try:
-                    st = os.stat(fp)
-                except Exception:
-                    _scan_status["errors"] += 1
-                    continue
-
-                mtime = st.st_mtime
-
-                # Skip if unchanged (incremental)
-                if incremental and fp in existing and abs(existing[fp] - mtime) < 1:
-                    _scan_status["total_skipped"] += 1
-                    continue
-
-                ext = os.path.splitext(fname)[1].lower()
-                client_folder, category = _detect_client_folder(fp, root)
-                parent_dir = os.path.basename(dirpath)
-                mtime_date = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
-
-                batch.append((
-                    fp, fname, ext, st.st_size, mtime, mtime_date,
-                    client_folder, category, parent_dir, now,
-                ))
-
-                if len(batch) >= BATCH_SIZE:
-                    _flush_batch()
-
-                # Log progress every 10K files
-                if _scan_status["total_found"] % 10000 == 0:
-                    log.info("catalog_progress: %d found, %d inserted, %d skipped",
-                             _scan_status["total_found"],
-                             _scan_status["total_inserted"],
-                             _scan_status["total_skipped"])
-
-    _flush_batch()
     conn.close()
 
     _scan_status.update({

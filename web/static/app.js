@@ -3416,8 +3416,8 @@ async function loadCatalogStatus() {
 
     el.innerHTML = statusHtml;
 
-    // Populate client dropdown
-    if (stats.by_category) {
+    // Populate client dropdown (only once)
+    if (stats.by_category && !_catalogClientsLoaded) {
       loadCatalogClients();
     }
   } catch (e) {
@@ -3426,18 +3426,80 @@ async function loadCatalogStatus() {
   }
 }
 
+var _catalogClientsLoaded = false;
+var _catalogClientsList = [];
+var _catalogClientValue = '';
+
 async function loadCatalogClients() {
   try {
-    const clients = await api('GET', '/api/catalog/clients?limit=500');
-    const sel = document.getElementById('catalogClientFilter');
-    if (!sel || !clients.clients) return;
-    const current = sel.value;
-    sel.innerHTML = '<option value="">All Clients</option>' +
-      clients.clients.map(c =>
-        `<option value="${escHtml(c.client_folder)}">${escHtml(c.client_folder)} (${c.file_count})</option>`
-      ).join('');
-    sel.value = current;
+    const resp = await api('GET', '/api/catalog/clients?limit=500');
+    if (!resp.clients) return;
+    _catalogClientsList = resp.clients;
+    _catalogClientsLoaded = true;
+    // Set initial display
+    const inp = document.getElementById('catalogClientInput');
+    if (inp && !inp.value && !_catalogClientValue) {
+      inp.placeholder = 'All Clients (' + _catalogClientsList.length + ')';
+    }
   } catch (e) { /* silent */ }
+}
+
+function openCatalogClientDD() {
+  const dd = document.getElementById('catalogClientDD');
+  if (!dd) return;
+  dd.classList.remove('hidden');
+  filterCatalogClientDD();
+}
+
+function filterCatalogClientDD() {
+  const inp = document.getElementById('catalogClientInput');
+  const dd = document.getElementById('catalogClientDD');
+  if (!dd) return;
+  const q = (inp ? inp.value : '').toLowerCase();
+  const filtered = q
+    ? _catalogClientsList.filter(c => c.client_folder.toLowerCase().indexOf(q) !== -1)
+    : _catalogClientsList;
+  if (!filtered.length) {
+    dd.innerHTML = '<div class="case-dd-empty">No matches</div>';
+    return;
+  }
+  dd.innerHTML = '<div class="case-dd-item" onclick="selectCatalogClient(\'\')">' +
+    '<strong>All Clients</strong> <span class="muted">(' + _catalogClientsList.length + ')</span></div>' +
+    filtered.slice(0, 100).map(c =>
+      '<div class="case-dd-item' + (c.client_folder === _catalogClientValue ? ' active' : '') +
+      '" onclick="selectCatalogClient(\'' + escHtml(c.client_folder).replace(/'/g, "\\'") + '\')">' +
+      escHtml(c.client_folder) + ' <span class="muted">(' + c.file_count + ')</span></div>'
+    ).join('');
+}
+
+function selectCatalogClient(val) {
+  _catalogClientValue = val;
+  const inp = document.getElementById('catalogClientInput');
+  if (inp) {
+    inp.value = val || '';
+    inp.placeholder = val ? val : 'All Clients (' + _catalogClientsList.length + ')';
+  }
+  document.getElementById('catalogClientDD').classList.add('hidden');
+  clearCatalogResults();
+}
+
+function closeCatalogClientDD(e) {
+  setTimeout(function() {
+    var dd = document.getElementById('catalogClientDD');
+    if (dd) dd.classList.add('hidden');
+  }, 200);
+}
+
+function clearCatalogResults() {
+  var el = document.getElementById('catalogResults');
+  if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+}
+
+function clearTextResults() {
+  var el = document.getElementById('textResults');
+  if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+  var inp = document.getElementById('textSearchInput');
+  if (inp) inp.value = '';
 }
 
 async function triggerCatalogScan(full) {
@@ -3461,13 +3523,13 @@ async function triggerCatalogScan(full) {
 
 async function searchCatalog() {
   const q = document.getElementById('catalogSearchInput').value.trim();
-  const client = document.getElementById('catalogClientFilter').value;
+  const client = _catalogClientValue;
   const category = document.getElementById('catalogCategoryFilter').value;
   const el = document.getElementById('catalogResults');
   if (!el) return;
 
   if (!q && !client && !category) {
-    el.style.display = 'none';
+    clearCatalogResults();
     return;
   }
 

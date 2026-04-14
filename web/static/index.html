@@ -264,10 +264,13 @@
             <div style="margin-top:14px;">
               <div style="display:flex;gap:6px;align-items:center;">
                 <input type="text" id="catalogSearchInput" placeholder="Search filenames..." style="flex:1;font-size:12px;padding:5px 8px;">
-                <select id="catalogClientFilter" style="font-size:12px;padding:5px;max-width:200px;">
-                  <option value="">All Clients</option>
-                </select>
-                <select id="catalogCategoryFilter" style="font-size:12px;padding:5px;">
+                <div class="case-search-wrap" style="position:relative;max-width:220px;">
+                  <input type="text" id="catalogClientInput" placeholder="All Clients"
+                    style="font-size:12px;padding:5px 8px;width:100%;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);"
+                    onfocus="openCatalogClientDD()" oninput="filterCatalogClientDD()" onblur="closeCatalogClientDD()">
+                  <div class="case-dropdown hidden" id="catalogClientDD" style="max-height:250px;"></div>
+                </div>
+                <select id="catalogCategoryFilter" onchange="clearCatalogResults()" style="font-size:12px;padding:5px;">
                   <option value="">All Types</option>
                   <option value="INJURY">Injury</option>
                   <option value="CRIMINAL">Criminal</option>
@@ -277,7 +280,8 @@
                   <option value="REAL_ESTATE">Real Estate</option>
                   <option value="UNCATEGORIZED">Other</option>
                 </select>
-                <button class="btn btn-primary-sm" onclick="searchCatalog()">Search</button>
+                <button class="btn btn-primary-sm" onclick="searchCatalog()" style="font-size:12px;padding:5px 12px;">Search</button>
+                <button class="btn" onclick="clearCatalogResults()" style="font-size:12px;">Clear</button>
               </div>
               <div id="catalogResults" class="catalog-results" style="margin-top:10px;display:none;"></div>
             </div>
@@ -293,7 +297,8 @@
             <div style="margin-top:14px;">
               <div style="display:flex;gap:6px;align-items:center;">
                 <input type="text" id="textSearchInput" placeholder="Search file contents..." style="flex:1;font-size:12px;padding:5px 8px;">
-                <button class="btn btn-primary-sm" onclick="searchFullText()">Search</button>
+                <button class="btn btn-primary-sm" onclick="searchFullText()" style="font-size:12px;padding:5px 12px;">Search</button>
+                <button class="btn" onclick="clearTextResults()" style="font-size:12px;">Clear</button>
               </div>
               <div id="textResults" class="catalog-results" style="margin-top:10px;display:none;"></div>
             </div>
@@ -821,7 +826,7 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=26"></script>
+<script src="/static/app.js?v=28"></script>
 
 <!-- NAS Folder Browser Modal -->
 <div class="modal-overlay hidden" id="nasBrowserModal">
