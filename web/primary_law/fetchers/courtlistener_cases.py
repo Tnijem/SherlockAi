@@ -61,6 +61,23 @@ def _clean_html(s: str) -> str:
     return s.strip()
 
 
+def _url_quote_path(url: str) -> str:
+    """Percent-encode just the path portion of a URL, leaving scheme/host/query
+    alone. Safe for URLs that already have some encoding — we only touch raw
+    unsafe characters. Needed for court-hosted PDFs whose filenames contain
+    spaces or ampersands."""
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except Exception:
+        return url
+    # Keep common path characters unquoted; spaces and `&` etc. get encoded.
+    safe = "/%-._~!$'()*+,;=:@"
+    new_path = urllib.parse.quote(parts.path, safe=safe)
+    return urllib.parse.urlunsplit((
+        parts.scheme, parts.netloc, new_path, parts.query, parts.fragment,
+    ))
+
+
 def _http_get_json(url: str, params: dict | None = None, token: str | None = None) -> dict:
     if params:
         url = url + ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
@@ -227,6 +244,11 @@ class CourtListenerFetcher(Fetcher):
                     if local_path else None
                 )
                 if target:
+                    # Some court PDFs have spaces or special chars in the path
+                    # (e.g. FL Supreme Court multi-docket opinions). urllib
+                    # rejects raw spaces, so encode the path portion while
+                    # leaving scheme/host/query intact.
+                    target = _url_quote_path(target)
                     try:
                         req = urllib.request.Request(target, headers={"User-Agent": USER_AGENT})
                         with urllib.request.urlopen(req, timeout=60) as resp:
