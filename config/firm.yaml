@@ -1,0 +1,23 @@
+# Sherlock firm configuration.
+#
+# This file identifies the firm installing Sherlock and the jurisdictions + practice
+# areas it covers. The ingestion pipeline reads this file to decide which primary-law
+# corpus to pull in. Retrieval reads it to scope queries to the firm's jurisdictions.
+#
+# To add a new state: drop a matching config/jurisdictions/<CODE>.yaml file, then add
+# the code to `jurisdictions` below. No code changes required.
+
+firm:
+  name: "Dennis Law"
+  primary_jurisdiction: GA
+  jurisdictions:
+    - GA
+    - FL
+  practice_areas:
+    - personal_injury
+    - contracts
+    - civil_procedure
+    - estates
+  case_law:
+    lookback_years: 10
+    max_per_court: 2000   # safety cap when pulling from CourtListener

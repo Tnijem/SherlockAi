@@ -24,6 +24,16 @@ try:
 except ImportError:
     _HAS_NAS_SEARCH = False
 
+# Primary-law collection (statutes/rules/cases) - optional, absent in installs
+# that haven't run scripts/ingest_primary_law.py yet.
+try:
+    from primary_law import PRIMARY_LAW_COLLECTION
+    from primary_law.registry import load_firm
+    _HAS_PRIMARY_LAW = True
+except Exception:  # ImportError, missing yaml, missing config file
+    PRIMARY_LAW_COLLECTION = "primary_law"
+    _HAS_PRIMARY_LAW = False
+
 from logging_config import get_logger
 
 log = get_logger("sherlock.rag")
@@ -34,6 +44,12 @@ SEARXNG_URL = "http://localhost:8888"
 # Chunks below this are too dissimilar to be useful and increase hallucination risk.
 MIN_SCORE_THRESHOLD = 0.30
 MIN_SOURCE_DISPLAY_SCORE = 0.40  # chunks below this score are used for LLM context but not shown as sources
+
+# Primary-law authoritative-source boost. Statutory text is ground truth: when
+# a chunk from the `primary_law` collection matches, we bump its score so it
+# ranks above generic document chunks in the LLM context window. Capped at 1.0.
+PRIMARY_LAW_SCORE_BOOST = 0.15
+PRIMARY_LAW_TOP_N = 6    # how many primary-law chunks to include per query
 
 # ── ChromaDB client (persistent singleton) ────────────────────────────────────
 
@@ -57,6 +73,89 @@ def get_or_create_collection(name: str) -> chromadb.Collection:
         name,
         metadata={"hnsw:space": "cosine"},
     )
+
+
+# ── Primary-law retrieval ─────────────────────────────────────────────────────
+
+@lru_cache(maxsize=1)
+def _firm_jurisdictions() -> tuple[str, ...] | None:
+    """Cached read of the firm's jurisdiction list. Returns None if the config
+    is absent - in that case primary_law retrieval is disabled."""
+    if not _HAS_PRIMARY_LAW:
+        return None
+    try:
+        firm = load_firm()
+        return tuple(firm.jurisdictions)
+    except Exception as e:
+        log.warning("primary_law: firm config unreadable, disabling: %s", e)
+        return None
+
+
+def _query_primary_law(embedding: list[float], n: int = PRIMARY_LAW_TOP_N) -> list[dict]:
+    """Query the primary_law collection with a firm-scoped jurisdiction filter.
+
+    Returns results in the same dict shape as retrieve() so callers can merge.
+    Each result gets `primary_law=True` and its score is boosted by
+    PRIMARY_LAW_SCORE_BOOST (capped at 1.0) to outrank generic document chunks.
+    """
+    jurisdictions = _firm_jurisdictions()
+    if not jurisdictions:
+        return []
+
+    client = _chroma_client()
+    try:
+        coll = client.get_collection(PRIMARY_LAW_COLLECTION)
+    except Exception:
+        return []  # collection not yet created - ingest hasn't run
+
+    try:
+        if coll.count() == 0:
+            return []
+    except Exception:
+        return []
+
+    where: dict
+    if len(jurisdictions) == 1:
+        where = {"jurisdiction": jurisdictions[0]}
+    else:
+        where = {"jurisdiction": {"$in": list(jurisdictions)}}
+
+    try:
+        res = coll.query(
+            query_embeddings=[embedding],
+            n_results=min(n, coll.count()),
+            where=where,
+            include=["documents", "metadatas", "distances"],
+        )
+    except Exception as e:
+        log.warning("primary_law query failed: %s", e)
+        return []
+
+    out: list[dict] = []
+    for doc, meta, dist in zip(
+        res["documents"][0],
+        res["metadatas"][0],
+        res["distances"][0],
+    ):
+        base_score = round(1 - dist, 4)
+        boosted = min(1.0, base_score + PRIMARY_LAW_SCORE_BOOST)
+        cit = meta.get("citation", "primary law")
+        out.append({
+            "text":         doc,
+            "source":       cit,
+            "path":         meta.get("official_url", ""),
+            "chunk":        meta.get("chunk_index", 0),
+            "page_start":   0, "page_end": 0,
+            "line_start":   0, "line_end": 0,
+            "score":        boosted,
+            "collection":   PRIMARY_LAW_COLLECTION,
+            "primary_law":  True,
+            "citation":     cit,
+            "jurisdiction": meta.get("jurisdiction", ""),
+            "source_type":  meta.get("source_type", ""),
+            "topic":        meta.get("topic", ""),
+        })
+    return out
 
 
 def collection_exists(name: str) -> bool:
@@ -243,6 +342,21 @@ def retrieve(
     embedding = embed_query(query)
     client = _chroma_client()
     results: list[dict] = []
+
+    # ── Primary-law authoritative sources ─────────────────────────────────
+    # Statutes, court rules, cases, and watched legislation live in a separate
+    # collection scoped by the firm's jurisdictions in config/firm.yaml. These
+    # chunks are cited, boosted, and added alongside the user/case/global
+    # collections. Ground-truth text beats generic documents for legal Qs.
+    primary_law_hits = _query_primary_law(embedding, n=PRIMARY_LAW_TOP_N)
+    if primary_law_hits:
+        log.info(
+            "primary_law: %d hits (top citation=%s score=%.3f)",
+            len(primary_law_hits),
+            primary_law_hits[0].get("citation", "?"),
+            primary_law_hits[0].get("score", 0.0),
+        )
+        results.extend(primary_law_hits)
 
     seen_names: set[str] = set()
 

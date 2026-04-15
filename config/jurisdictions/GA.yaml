@@ -1,0 +1,50 @@
+# Georgia jurisdiction registry.
+#
+# Source of truth for what "Georgia law" means in Sherlock: where to fetch the
+# statutes, how citations are formatted, which CourtListener courts cover the
+# state, which OCGA titles map to each practice area.
+
+code: GA
+name: Georgia
+
+statutes:
+  citation_format: "O.C.G.A. § {section}"
+  source:
+    # Public.Resource.Org hosts the authoritative OCGA dump as public-domain
+    # content per the 2020 SCOTUS decision in Georgia v. Public.Resource.Org.
+    # They publish per-title ODT/RTF files inside a zipped release bundle.
+    # We use the latest release available at the base_url.
+    type: resource_org_ga
+    base_url: "https://law.resource.org/pub/us/code/ga/"
+    release: "gov.ga.ocga.2019.08.21.release.73.zip"
+  # Practice area → list of OCGA titles to ingest.
+  # Titles are coarse on purpose; the chunker tags every section with its
+  # title/chapter/section so retrieval can filter finer than this map.
+  practice_area_map:
+    personal_injury: [51]     # Torts
+    contracts:       [13]     # Contracts
+    civil_procedure: [9]      # Civil Practice Act
+    estates:         [53]     # Wills, Trusts, Administration of Estates
+    criminal:        [16, 17] # Crimes, Criminal Procedure
+    family:          [19]     # Domestic Relations
+    property:        [44]     # Property
+    business:        [14]     # Corporations, Partnerships, Associations
+
+court_rules:
+  - name: "Uniform Superior Court Rules"
+    type: html
+    url: "https://www.gasupreme.us/court-information/uscr/"
+  - name: "Georgia Rules of Civil Procedure (O.C.G.A. Title 9 Ch. 11)"
+    # The Georgia Civil Practice Act IS the rules of civil procedure - already
+    # captured under statutes Title 9. Noted here so installers know why there
+    # isn't a separate "GRCP" file like Florida has.
+    type: alias
+    see: "statutes.title.9.chapter.11"
+
+case_law:
+  # CourtListener court IDs. Run `courtlistener.py --list-courts` to find others.
+  courtlistener_courts:
+    - ga       # Supreme Court of Georgia
+    - gactapp  # Court of Appeals of Georgia
+
+legislation: []   # add watched bills here (see FL.yaml for HB 837 example)

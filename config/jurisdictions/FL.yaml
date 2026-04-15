@@ -1,0 +1,42 @@
+# Florida jurisdiction registry.
+
+code: FL
+name: Florida
+
+statutes:
+  citation_format: "Fla. Stat. § {section}"
+  source:
+    type: flsenate
+    base_url: "https://www.flsenate.gov/Laws/Statutes/2024/"
+  practice_area_map:
+    personal_injury: [768]           # Negligence, tort reform (HB 837 lives here)
+    contracts:       [95, 672, 687]  # SOL, UCC sales, interest
+    civil_procedure: [95]            # Limitations - FRCP lives in court_rules
+    estates:         [732, 733, 736] # Probate code, trusts
+    criminal:        [775, 776, 777, 784, 790, 810, 812]
+    family:          [61, 63]        # Dissolution, adoption
+    property:        [689, 718]      # Conveyances, condominiums
+    business:        [607, 608]      # Corporations, LLCs
+
+court_rules:
+  - name: "Florida Rules of Civil Procedure"
+    type: pdf_url
+    url: "https://www-media.floridabar.org/uploads/2026/04/Civil-Procedure-Rules-04-01-26.pdf"
+    # Note: The Bar updates this URL periodically. If fetch fails, check
+    # https://www.floridabar.org/rules/ctproc/ for the current PDF.
+
+case_law:
+  courtlistener_courts:
+    - fla            # Supreme Court of Florida
+    - fladistctapp   # Florida District Courts of Appeal (all five)
+
+legislation:
+  # HB 837 (2023) - tort reform, rewrote FL comparative negligence rule.
+  # Ingesting the full bill text so retrieval can cite the actual statutory
+  # language rather than relying on model hallucinations.
+  - name: "HB 837"
+    year: 2023
+    description: "Civil Remedies / Tort Reform"
+    type: pdf_url
+    url: "https://www.flsenate.gov/Session/Bill/2023/837/BillText/er/PDF"
+    effective_date: "2023-03-24"

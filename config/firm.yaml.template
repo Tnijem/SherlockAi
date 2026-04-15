@@ -1,0 +1,39 @@
+# Sherlock firm configuration (TEMPLATE).
+#
+# Copy this file to `firm.yaml` in the same directory and edit the values
+# below. This file identifies the firm installing Sherlock and the
+# jurisdictions + practice areas it covers. The ingestion pipeline reads it
+# to decide which primary-law corpus to pull; retrieval reads it to scope
+# queries to the firm's jurisdictions.
+#
+# Full schema reference: docs/PRIMARY_LAW.md
+#
+# ── Quick setup ───────────────────────────────────────────────────────────
+# 1. Set firm.name to your firm's display name.
+# 2. Set primary_jurisdiction to the USPS code of your home state.
+# 3. Add every state you practice in to `jurisdictions`. For each code,
+#    confirm that config/jurisdictions/<CODE>.yaml exists. Sherlock ships
+#    with GA.yaml and FL.yaml preconfigured. For other states see
+#    docs/PRIMARY_LAW.md §5 ("Adding a new jurisdiction").
+# 4. Trim `practice_areas` to the keys your firm handles. Each key must
+#    exist in your jurisdictions' `practice_area_map`. Known keys:
+#       personal_injury, contracts, civil_procedure, estates,
+#       criminal, family, property, business
+# 5. Adjust `case_law.lookback_years` / `max_per_court` if you want a
+#    smaller or larger case-law corpus. Defaults pull 2,000 opinions per
+#    appellate court over the last 10 years.
+# 6. Run: scripts/ingest_primary_law.py
+
+firm:
+  name: "CHANGE ME Law Firm"
+  primary_jurisdiction: GA
+  jurisdictions:
+    - GA
+  practice_areas:
+    - personal_injury
+    - contracts
+    - civil_procedure
+    - estates
+  case_law:
+    lookback_years: 10
+    max_per_court: 2000   # CourtListener safety cap
