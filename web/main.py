@@ -2032,6 +2032,214 @@ def admin_delete_user(
 
 
 
+
+# ── Unified Task API (dictation + email + calendar) ────────────────────────
+# These endpoints read from the unified sherlock_tasks.db which combines tasks
+# from all sources. The legacy /api/dictations/* endpoints continue to work
+# for backwards compatibility, reading from dictations.db.
+
+_TASKS_DB_PATH = str(Path(__file__).resolve().parent.parent / "data" / "sherlock_tasks.db")
+
+
+def _get_tasks_db():
+    if not os.path.exists(_TASKS_DB_PATH):
+        return None
+    db = sqlite3.connect(_TASKS_DB_PATH, timeout=5)
+    db.row_factory = sqlite3.Row
+    return db
+
+
+@app.get("/api/tasks")
+def list_unified_tasks(
+    source: str | None = None,
+    status: str | None = None,
+    assignee: str | None = None,
+    priority: str | None = None,
+    limit: int = 200,
+    current_user: User = Depends(auth.get_current_user),
+):
+    """List tasks from all sources (dictation, email, calendar).
+    Filterable by source, status, assignee, priority."""
+    db = _get_tasks_db()
+    if not db:
+        return {"tasks": [], "summary": {}}
+
+    query = "SELECT * FROM sherlock_tasks WHERE 1=1"
+    params: list = []
+
+    if source:
+        query += " AND source = ?"
+        params.append(source)
+    if status:
+        query += " AND status = ?"
+        params.append(status)
+    if assignee:
+        query += " AND assignee = ?"
+        params.append(assignee)
+    if priority:
+        query += " AND priority = ?"
+        params.append(priority)
+
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+
+    tasks = [dict(r) for r in db.execute(query, params).fetchall()]
+
+    # Summary stats
+    summary = {}
+    for row in db.execute(
+        "SELECT source, status, COUNT(*) as cnt FROM sherlock_tasks GROUP BY source, status"
+    ).fetchall():
+        key = f"{row['source']}_{row['status']}"
+        summary[key] = row["cnt"]
+
+    total = db.execute("SELECT COUNT(*) FROM sherlock_tasks").fetchone()[0]
+    pending = db.execute("SELECT COUNT(*) FROM sherlock_tasks WHERE status='pending'").fetchone()[0]
+    summary["total"] = total
+    summary["pending"] = pending
+
+    db.close()
+    return {"tasks": tasks, "summary": summary}
+
+
+@app.get("/api/tasks/assignees")
+def list_task_assignees(
+    current_user: User = Depends(auth.get_current_user),
+):
+    """List all unique assignees across all task sources."""
+    db = _get_tasks_db()
+    if not db:
+        return {"assignees": []}
+    rows = db.execute(
+        "SELECT assignee, COUNT(*) as cnt FROM sherlock_tasks "
+        "WHERE assignee IS NOT NULL GROUP BY assignee ORDER BY cnt DESC"
+    ).fetchall()
+    db.close()
+    return {"assignees": [{"name": r["assignee"], "task_count": r["cnt"]} for r in rows]}
+
+
+@app.patch("/api/tasks/{task_id}")
+def update_unified_task(
+    task_id: int,
+    body: dict,
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Update a task from any source (status, assignee, notes, etc.)."""
+    db = _get_tasks_db()
+    if not db:
+        raise HTTPException(status_code=404, detail="Task database not found")
+
+    task = db.execute("SELECT id FROM sherlock_tasks WHERE id = ?", (task_id,)).fetchone()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    updatable = ["status", "assignee", "action", "client_or_case", "priority",
+                 "due_hint", "notes", "case_folder"]
+    for field in updatable:
+        if field in body:
+            db.execute(f"UPDATE sherlock_tasks SET {field} = ? WHERE id = ?",
+                       (body[field], task_id))
+    if body.get("status") == "completed":
+        from datetime import datetime
+        db.execute("UPDATE sherlock_tasks SET completed_at = ? WHERE id = ?",
+                   (datetime.utcnow().isoformat(), task_id))
+    db.commit()
+    updated = dict(db.execute("SELECT * FROM sherlock_tasks WHERE id = ?", (task_id,)).fetchone())
+    db.close()
+    return updated
+
+
+@app.get("/api/tasks/summary")
+def task_summary(
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Dashboard summary: task counts by source, status, and assignee."""
+    db = _get_tasks_db()
+    if not db:
+        return {"by_source": {}, "by_status": {}, "by_assignee": {}, "total": 0}
+
+    by_source = {}
+    for r in db.execute("SELECT source, COUNT(*) as cnt FROM sherlock_tasks GROUP BY source").fetchall():
+        by_source[r["source"]] = r["cnt"]
+
+    by_status = {}
+    for r in db.execute("SELECT status, COUNT(*) as cnt FROM sherlock_tasks GROUP BY status").fetchall():
+        by_status[r["status"]] = r["cnt"]
+
+    by_assignee = {}
+    for r in db.execute(
+        "SELECT assignee, COUNT(*) as cnt FROM sherlock_tasks "
+        "WHERE status='pending' AND assignee IS NOT NULL "
+        "GROUP BY assignee ORDER BY cnt DESC LIMIT 20"
+    ).fetchall():
+        by_assignee[r["assignee"]] = r["cnt"]
+
+    total = db.execute("SELECT COUNT(*) FROM sherlock_tasks").fetchone()[0]
+    db.close()
+
+    return {
+        "by_source": by_source,
+        "by_status": by_status,
+        "by_assignee": by_assignee,
+        "total": total,
+    }
+
+
+@app.post("/api/email/scan")
+def trigger_email_scan(
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Trigger a one-time email scan (runs as subprocess)."""
+    worker = str(Path(__file__).parent / "email_worker.py")
+    venv_python = str(Path(__file__).resolve().parent.parent / "venv" / "bin" / "python")
+    subprocess.Popen(
+        [venv_python, worker, "once"],
+        cwd=str(Path(__file__).parent),
+        stdout=open("/tmp/email_scan.log", "w"),
+        stderr=subprocess.STDOUT,
+    )
+    return {"status": "email scan started"}
+
+
+@app.post("/api/calendar/scan")
+def trigger_calendar_scan(
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Trigger a one-time calendar scan (runs as subprocess)."""
+    worker = str(Path(__file__).parent / "calendar_worker.py")
+    venv_python = str(Path(__file__).resolve().parent.parent / "venv" / "bin" / "python")
+    subprocess.Popen(
+        [venv_python, worker, "once"],
+        cwd=str(Path(__file__).parent),
+        stdout=open("/tmp/calendar_scan.log", "w"),
+        stderr=subprocess.STDOUT,
+    )
+    return {"status": "calendar scan started"}
+
+
+@app.get("/api/email/status")
+def email_worker_status(
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Get email worker status."""
+    status_path = Path(__file__).resolve().parent.parent / "data" / "email_status.json"
+    if status_path.exists():
+        return json.loads(status_path.read_text())
+    return {"stage": "not_started"}
+
+
+@app.get("/api/calendar/status")
+def calendar_worker_status(
+    current_user: User = Depends(auth.get_current_user),
+):
+    """Get calendar worker status."""
+    status_path = Path(__file__).resolve().parent.parent / "data" / "calendar_status.json"
+    if status_path.exists():
+        return json.loads(status_path.read_text())
+    return {"stage": "not_started"}
+
+
+
 # ── Dictation Analysis ─────────────────────────────────────────────────────
 
 @app.get("/api/dictations")

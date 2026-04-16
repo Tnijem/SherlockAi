@@ -50,3 +50,4 @@ watchdog>=4.0.0
 # Dataset tools (fetch_cold_cases.py — optional, not needed for web server)
 datasets>=4.0.0
 huggingface_hub>=0.20.0
+msal>=1.28

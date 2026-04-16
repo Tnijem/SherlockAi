@@ -21,3 +21,22 @@ firm:
   case_law:
     lookback_years: 10
     max_per_court: 2000   # safety cap when pulling from CourtListener
+
+  # ── Email & Calendar monitoring (Office 365 / Microsoft Graph API) ──────
+  # Sherlock uses a dedicated service account to read attorney mailboxes and
+  # calendars via delegated permissions. See docs/INSTALL.md for setup.
+  #
+  # IMPORTANT: Do NOT put client_secret here. Set the SHERLOCK_O365_SECRET
+  # environment variable instead (in start.sh or launchd plist).
+  email:
+    provider: office365
+    tenant_id: "CHANGEME"                    # Azure AD tenant ID
+    client_id: "CHANGEME"                    # App registration client ID
+    # client_secret: set SHERLOCK_O365_SECRET env var
+    service_account: "sherlock@dennislaw.com" # Sherlock's own O365 mailbox
+    monitored_mailboxes:
+      - "sam@dennislaw.com"
+    # Poll intervals (seconds). Override via EMAIL_POLL / CALENDAR_POLL env vars.
+    email_poll_interval: 120     # check email every 2 min
+    calendar_poll_interval: 600  # check calendar every 10 min
+    calendar_lookahead_days: 60  # how far ahead to scan for events
